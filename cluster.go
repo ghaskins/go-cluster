@@ -6,21 +6,21 @@ import (
 	"fmt"
 	"log"
 	"encoding/pem"
-	//"crypto/tls"
+	"crypto/tls"
 	"crypto/x509"
 )
 
 func main() {
 	id         := flag.String("id", "localhost:2001", "our identity")
-	privatekey := flag.String("key", "key1.pem", "the path to our private key")
-	certspath  := flag.String("certs", "certs", "the path to our configuration")
+	privateKey := flag.String("key", "key1.pem", "the path to our private key")
+	certsPath  := flag.String("certs", "certs", "the path to our configuration")
 
 	flag.Parse();
-	fmt.Printf("id: %s, privatekey: %s, config: %s\n", *id, *privatekey, *certspath)
+	fmt.Printf("id: %s, privatekey: %s, config: %s\n", *id, *privateKey, *certsPath)
 
-	certsbuf, err := ioutil.ReadFile(*certspath)
+	certsbuf, err := ioutil.ReadFile(*certsPath)
 	if err != nil {
-		panic("failed to open certificates file \"" + *certspath + "\"")
+		panic("failed to open certificates file \"" + *certsPath + "\"")
 	}
 
 	certs := make([]*x509.Certificate, 0)
@@ -59,11 +59,16 @@ func main() {
 
 	fmt.Printf("Using %s with peers %v\n", self.Subject.CommonName, peers)
 
+	var tlsCert *tls.Certificate
+	tlsCert, err = CreateTlsIdentity(self, *privateKey)
+	if err != nil {
+		panic(err)
+	}
+
 	for _, peer := range peers {
-		conn := NewConnection(self, peer, *privatekey)
+		var conn *tls.Conn
+		conn, err = Dial(tlsCert, peer)
 
 		fmt.Println(conn)
 	}
-
-
 }
