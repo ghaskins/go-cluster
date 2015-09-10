@@ -1,24 +1,24 @@
 package main
 
 import (
-	"encoding/pem"
 	"crypto/x509"
 	"crypto/tls"
 	"crypto"
-	"io/ioutil"
-	"errors"
+	//"io/ioutil"
+	//"errors"
 )
 
 func parseKey(path string) (crypto.PublicKey, error) {
+	/*
 	buf, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, errors.New("failed to open key file \"" + path + "\"")
 	}
+	*/
+	//der, _ := pem.Decode(buf);
 
-	der, _ := pem.Decode(buf);
-
-	der.
-
+	//FIXME
+	return nil, nil
 }
 
 func CreateTlsIdentity(cert *x509.Certificate, privateKeyPath string) (conn *tls.Certificate, err error) {
@@ -31,9 +31,12 @@ func CreateTlsIdentity(cert *x509.Certificate, privateKeyPath string) (conn *tls
 	}
 
 	tlsCert := &tls.Certificate{
-		Certificate: cert.RawTBSCertificate,
+		Certificate: make([][]byte, 1),
 		PrivateKey:  privateKey,
 	}
+
+	tlsCert.Certificate[0] = cert.RawTBSCertificate
+	//tlsCert.PrivateKey[0] = privateKey
 
 	return tlsCert, nil
 }

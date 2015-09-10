@@ -1,24 +1,30 @@
 package main
 
 import (
-	"encoding/pem"
-	"crypto/x509"
 	"crypto/tls"
-	"crypto"
-	"io/ioutil"
 	"errors"
+	"net"
 )
 
-func verifySelfSigned(conn *tls.Conn) error {
+type Connection struct {
+	Conn *tls.Conn
+	Id *Identity
+}
+
+func verifySelfSigned(conn *tls.Conn) (*Connection, error) {
 	certs := conn.ConnectionState().PeerCertificates
 
 	if len(certs) != 1 {
-		return errors.New("Illegal number of certificates presented by peer (" + string(len(certs)) + ")")
+		return nil, errors.New("Illegal number of certificates presented by peer (" + string(len(certs)) + ")")
 	}
 
 	cert := certs[0]
 
-	return cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature)
+	if err := cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature); err != nil {
+		return nil, err
+	}
+
+	return &Connection{Conn: conn, Id: NewIdentity(cert)}, nil
 }
 
 func newConfig(self *tls.Certificate) *tls.Config {
@@ -27,21 +33,40 @@ func newConfig(self *tls.Certificate) *tls.Config {
 		InsecureSkipVerify: true,
 	}
 
-	config.Certificates[0] = self
+	config.Certificates[0] = *self
 
 	return config
 }
 
-func Dial(self *tls.Certificate, peer *x509.Certificate) (conn *tls.Conn, err error) {
-	config := newConfig(self)
+func Dial(self *tls.Certificate, peer *Identity) (conn *Connection, err error) {
 
-	if conn, err = tls.Dial("tcp", peer.Subject.CommonName, config); err != nil {
+	tlsConn, err := tls.Dial("tcp", peer.Cert.Subject.CommonName, newConfig(self))
+	if err != nil {
 		return nil, err
 	}
 
-	if err = verifySelfSigned(conn) {
+	conn, err = verifySelfSigned(tlsConn)
+	if err != nil {
 		return nil, err
+	}
+
+	if conn.Id.Id != peer.Id {
+		return nil, errors.New("Unexpected peer identity")
 	}
 
 	return conn, nil
+}
+
+func Listen(self *tls.Certificate, laddr string) (net.Listener, error) {
+	return tls.Listen("tcp", laddr, newConfig(self))
+}
+
+func Accept(listener net.Listener) (*Connection, error) {
+
+	conn, err := listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+
+	return verifySelfSigned(conn.(*tls.Conn))
 }
