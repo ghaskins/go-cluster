@@ -17,7 +17,7 @@ func main() {
 	certsPath := flag.String("certs", "certs", "the path to our membership definition")
 
 	flag.Parse();
-	fmt.Printf("id: %d, privatekey: %s, config: %s\n", id, *privateKey, *certsPath)
+	fmt.Printf("id: %d, privatekey: %s, config: %s\n", *id, *privateKey, *certsPath)
 
 	certsbuf, err := ioutil.ReadFile(*certsPath)
 	if err != nil {
