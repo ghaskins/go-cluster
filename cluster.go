@@ -57,6 +57,13 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Using %s with peers %v", self.Subject.CommonName, peers)
+	fmt.Printf("Using %s with peers %v\n", self.Subject.CommonName, peers)
+
+	for _, peer := range peers {
+		conn := NewConnection(self, peer, *privatekey)
+
+		fmt.Println(conn)
+	}
+
 
 }
