@@ -51,7 +51,7 @@ func main() {
 		log.Fatalf("Invalid index")
 	}
 
-	peers       := map[string]*Identity{}
+	allPeers := map[string]*Identity{}
 	clientPeers := map[string]*Identity{}
 	serverPeers := map[string]*Identity{}
 
@@ -60,13 +60,13 @@ func main() {
 	for i, cert := range certs {
 		if i != *id {
 			peer := NewIdentity(cert)
-			peers[peer.Id] = peer
+			allPeers[peer.Id] = peer
 		}
 	}
 
 	fmt.Printf("Using %s - %s with peers:\n" , self.Cert.Subject.CommonName, self.Id)
 
-	for _, peer := range peers {
+	for _, peer := range allPeers {
 		fmt.Printf("\t%s - %s (", peer.Cert.Subject.CommonName, peer.Id)
 		if peer.Id < self.Id {
 			serverPeers[peer.Id] = peer
@@ -77,7 +77,7 @@ func main() {
 		}
 		fmt.Printf(")\n")
 	}
-	
+
 	var tlsCert *tls.Certificate
 	tlsCert, err = CreateTlsIdentity(self.Cert, *privateKey)
 	if err != nil {
@@ -86,7 +86,7 @@ func main() {
 
 	connectionEvents := make(chan *Connection)
 
-	// First start our primary listener if we have at least one server
+	// First start our primary listener if we have at least one client of our server
 	if len(serverPeers) > 0 {
 		go func() {
 			listener, err := Listen(tlsCert, self.Cert.Subject.CommonName)

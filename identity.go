@@ -15,7 +15,6 @@ func NewIdentity(cert *x509.Certificate) *Identity {
 	rawId := sha256.Sum256(cert.RawTBSCertificate)
 	var id string
 
-	// FIXME - convert rawId to id
 	for _, val := range rawId {
 		id += fmt.Sprintf("%02x", int(val))
 	}
