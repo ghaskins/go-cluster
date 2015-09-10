@@ -36,7 +36,6 @@ func CreateTlsIdentity(cert *x509.Certificate, privateKeyPath string) (conn *tls
 	}
 
 	tlsCert.Certificate[0] = cert.RawTBSCertificate
-	//tlsCert.PrivateKey[0] = privateKey
 
 	return tlsCert, nil
 }

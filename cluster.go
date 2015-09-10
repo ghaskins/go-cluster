@@ -12,12 +12,12 @@ import (
 )
 
 func main() {
-	id := flag.String("id", "localhost:2001", "our identity")
-	privateKey := flag.String("key", "key1.pem", "the path to our private key")
+	id := flag.Int("id", 0, "the index into the certificates that corresponds to our identity")
+	privateKey := flag.String("key", "key0.pem", "the path to our private key")
 	certsPath := flag.String("certs", "certs", "the path to our membership definition")
 
 	flag.Parse();
-	fmt.Printf("id: %s, privatekey: %s, config: %s\n", *id, *privateKey, *certsPath)
+	fmt.Printf("id: %d, privatekey: %s, config: %s\n", id, *privateKey, *certsPath)
 
 	certsbuf, err := ioutil.ReadFile(*certsPath)
 	if err != nil {
@@ -47,22 +47,24 @@ func main() {
 		certs = append(certs, cert)
 	}
 
+	if *id >= len(certs) {
+		log.Fatalf("Invalid index")
+	}
+
 	peers       := map[string]*Identity{}
 	clientPeers := map[string]*Identity{}
 	serverPeers := map[string]*Identity{}
 
-	var self *Identity
+	self := NewIdentity(certs[*id])
 
-	for _, cert := range certs {
-		if cert.Subject.CommonName != *id {
+	for i, cert := range certs {
+		if i != *id {
 			peer := NewIdentity(cert)
 			peers[peer.Id] = peer
-		} else {
-			self = NewIdentity(cert)
 		}
 	}
 
-	fmt.Printf("Using %s with peers:\n" , self.Cert.Subject.CommonName)
+	fmt.Printf("Using %s - %s with peers:\n" , self.Cert.Subject.CommonName, self.Id)
 
 	for _, peer := range peers {
 		fmt.Printf("\t%s - %s (", peer.Cert.Subject.CommonName, peer.Id)
