@@ -127,7 +127,7 @@ func main() {
 				fmt.Println("Attempting to connect to " + peer.Cert.Subject.CommonName)
 				conn, err = Dial(tlsCert, &peer)
 				if err == nil {
-					continue
+					break
 				}
 				time.Sleep(time.Duration(5)*time.Second)
 			}
@@ -139,6 +139,6 @@ func main() {
 	// Finally, wait for connections to come in
 	for {
 		conn := <-connectionEvents
-		fmt.Printf("new connection from %s", conn.Id.Id)
+		fmt.Printf("new connection from %s\n", conn.Id.Cert.Subject.CommonName)
 	}
 }
