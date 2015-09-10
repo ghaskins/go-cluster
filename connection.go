@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
+	"fmt"
 )
 
 type Connection struct {
@@ -12,10 +13,14 @@ type Connection struct {
 }
 
 func verifySelfSigned(conn *tls.Conn) (*Connection, error) {
-	certs := conn.ConnectionState().PeerCertificates
 
+	if err := conn.Handshake(); err != nil {
+		return nil, err
+	}
+
+	certs := conn.ConnectionState().PeerCertificates
 	if len(certs) != 1 {
-		return nil, errors.New("Illegal number of certificates presented by peer (" + string(len(certs)) + ")")
+		return nil, errors.New(fmt.Sprintf("Illegal number of certificates presented by peer (%d)", len(certs)))
 	}
 
 	cert := certs[0]
@@ -31,6 +36,7 @@ func newConfig(self *tls.Certificate) *tls.Config {
 	config := &tls.Config{
 		Certificates:       make([]tls.Certificate, 1),
 		InsecureSkipVerify: true,
+		ClientAuth:         tls.RequireAnyClientCert,
 	}
 
 	config.Certificates[0] = *self
