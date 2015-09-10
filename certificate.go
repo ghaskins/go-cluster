@@ -10,6 +10,7 @@ import (
 	"errors"
 	"encoding/pem"
 	"strings"
+	"log"
 )
 
 func parseKey(path string) (crypto.PublicKey, error) {
@@ -60,4 +61,36 @@ func CreateTlsIdentity(cert *x509.Certificate, privateKeyPath string) (conn *tls
 	tlsCert.Certificate[0] = cert.Raw
 
 	return tlsCert, nil
+}
+
+func ParseCertificates(path string) ([]*x509.Certificate, error) {
+	buf, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, errors.New("failed to open certificates file \"" + path + "\"")
+	}
+
+	certs := make([]*x509.Certificate, 0)
+
+	for remain := buf; remain != nil; {
+		var block *pem.Block
+
+		block, remain = pem.Decode(remain)
+		if block == nil || block.Type != "CERTIFICATE" {
+			break
+		}
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			panic(err)
+		}
+
+		if err := cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature); err != nil {
+			log.Printf("Dropping certificate %s due to bad signature (%s)", cert.Subject.CommonName, err.Error())
+			continue
+		}
+
+		certs = append(certs, cert)
+	}
+
+	return certs, nil
 }

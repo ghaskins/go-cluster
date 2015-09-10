@@ -2,13 +2,10 @@ package main
 
 import (
 	"flag"
-	"io/ioutil"
 	"fmt"
 	"log"
 	"time"
-	"encoding/pem"
 	"crypto/tls"
-	"crypto/x509"
 )
 
 func main() {
@@ -19,32 +16,9 @@ func main() {
 	flag.Parse();
 	fmt.Printf("id: %d, privatekey: %s, config: %s\n", *id, *privateKey, *certsPath)
 
-	certsbuf, err := ioutil.ReadFile(*certsPath)
+	certs, err := ParseCertificates(*certsPath)
 	if err != nil {
-		panic("failed to open certificates file \"" + *certsPath + "\"")
-	}
-
-	certs := make([]*x509.Certificate, 0)
-
-	for remain := certsbuf; remain != nil; {
-		var block *pem.Block
-
-		block, remain = pem.Decode(remain)
-		if block == nil || block.Type != "CERTIFICATE" {
-			break
-		}
-
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			panic(err)
-		}
-
-		if err := cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature); err != nil {
-			log.Printf("Dropping certificate %s due to bad signature (%s)", cert.Subject.CommonName, err.Error())
-			continue
-		}
-
-		certs = append(certs, cert)
+		panic(err)
 	}
 
 	if *id >= len(certs) {
