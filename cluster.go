@@ -77,7 +77,7 @@ func main() {
 		}
 		fmt.Printf(")\n")
 	}
-
+	
 	var tlsCert *tls.Certificate
 	tlsCert, err = CreateTlsIdentity(self.Cert, *privateKey)
 	if err != nil {
@@ -118,13 +118,14 @@ func main() {
 	// Now initiate a parallel workload to form connections with any of our peers
 	// that we are a client of
 	for _, peer := range clientPeers {
-		go func() {
+		go func(peer Identity) {
 
 			var conn *Connection
 
 			for {
 				var err error
-				conn, err = Dial(tlsCert, peer)
+				fmt.Println("Attempting to connect to " + peer.Cert.Subject.CommonName)
+				conn, err = Dial(tlsCert, &peer)
 				if err == nil {
 					continue
 				}
@@ -132,7 +133,7 @@ func main() {
 			}
 
 			connectionEvents <- conn
-		}()
+		}(*peer)
 	}
 
 	// Finally, wait for connections to come in
