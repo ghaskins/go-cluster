@@ -12,7 +12,7 @@ type Connection struct {
 	Id *Identity
 }
 
-func verifySelfSigned(conn *tls.Conn) (*Connection, error) {
+func completeConnection(conn *tls.Conn) (*Connection, error) {
 
 	if err := conn.Handshake(); err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func Dial(self *tls.Certificate, peer *Identity) (conn *Connection, err error) {
 		return nil, err
 	}
 
-	conn, err = verifySelfSigned(tlsConn)
+	conn, err = completeConnection(tlsConn)
 	if err != nil {
 		return nil, err
 	}
@@ -74,5 +74,5 @@ func Accept(listener net.Listener) (*Connection, error) {
 		return nil, err
 	}
 
-	return verifySelfSigned(conn.(*tls.Conn))
+	return completeConnection(conn.(*tls.Conn))
 }
