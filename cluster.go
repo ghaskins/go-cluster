@@ -14,7 +14,7 @@ import (
 func main() {
 	id := flag.Int("id", 0, "the index into the certificates that corresponds to our identity")
 	privateKey := flag.String("key", "key0.pem", "the path to our private key")
-	certsPath := flag.String("certs", "certs", "the path to our membership definition")
+	certsPath := flag.String("certs", "certs.conf", "the path to our membership definition")
 
 	flag.Parse();
 	fmt.Printf("id: %d, privatekey: %s, config: %s\n", *id, *privateKey, *certsPath)
