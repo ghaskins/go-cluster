@@ -8,6 +8,8 @@ import (
 	"crypto/tls"
 )
 
+type IdentityMap map[string]*Identity
+
 func main() {
 	id := flag.Int("id", 0, "the index into the certificates that corresponds to our identity")
 	privateKey := flag.String("key", "key0.pem", "the path to our private key")
@@ -25,9 +27,9 @@ func main() {
 		log.Fatalf("Invalid index")
 	}
 
-	allPeers := map[string]*Identity{}
-	clientPeers := map[string]*Identity{}
-	serverPeers := map[string]*Identity{}
+	allPeers    := IdentityMap{}
+	clientPeers := IdentityMap{}
+	serverPeers := IdentityMap{}
 
 	self := NewIdentity(certs[*id])
 
