@@ -38,6 +38,14 @@ func (c *Connection) Recv(m proto.Message) error {
 	len := binary.BigEndian.Uint32(header)
 	// FIXME: guard against an upper MTU violation
 	payload := make([]byte, len)
+	pLen, err := c.Conn.Read(payload)
+	if err != nil {
+		return err
+	}
+	if pLen != int(len) {
+		return errors.New(fmt.Sprintf("Read error: expected %d bytes, got %d", len, pLen))
+	}
+
 	err = proto.Unmarshal(payload, m)
 	if err != nil {
 		return err
