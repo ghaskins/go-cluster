@@ -81,7 +81,8 @@ func ParseCertificates(path string) ([]*x509.Certificate, error) {
 
 		cert, err := x509.ParseCertificate(block.Bytes)
 		if err != nil {
-			panic(err)
+			log.Printf("Dropping certificate due to parse failure (%s)", err.Error())
+			continue
 		}
 
 		if err := cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature); err != nil {

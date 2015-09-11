@@ -76,7 +76,8 @@ func main() {
 
 				conn, err = Accept(listener)
 				if err != nil {
-					panic(err)
+					log.Printf("Dropping connection: %s", err.Error())
+					continue
 				}
 
 				// Check to see if the connection is related to a peer we expect to be connecting
