@@ -1,0 +1,7 @@
+package main;
+
+message Negotiate {
+    required string magic   = 1;
+    required int32  version = 2;
+    repeated string options = 3;
+}
