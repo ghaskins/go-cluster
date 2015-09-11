@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"fmt"
+	"strings"
 	"github.com/golang/protobuf/proto"
 	"encoding/binary"
 )
@@ -93,6 +94,14 @@ func newNegotiate() *Negotiate {
 	}
 }
 
+func verifyProtocol(ours, theirs *Negotiate) error {
+	if strings.Compare(*ours.Magic, *theirs.Magic) != 0 || *ours.Version != *theirs.Version {
+		return errors.New(fmt.Sprintf("incompatible wire protocol (ours: %v, theirs: %v)", ours, theirs))
+	}
+
+	return nil
+}
+
 func Dial(self *tls.Certificate, peer *Identity) (conn *Connection, err error) {
 
 	tlsConn, err := tls.Dial("tcp", peer.Cert.Subject.CommonName, newConfig(self))
@@ -120,8 +129,8 @@ func Dial(self *tls.Certificate, peer *Identity) (conn *Connection, err error) {
 		return nil, err
 	}
 
-	if ours.Magic != theirs.Magic || ours.Version != theirs.Version {
-		return nil, errors.New("incompatible wire protocol")
+	if err = verifyProtocol(ours, theirs); err != nil {
+		return nil, err
 	}
 
 	return conn, nil
@@ -152,8 +161,8 @@ func Accept(listener net.Listener) (*Connection, error) {
 		return nil, err
 	}
 
-	if ours.Magic != theirs.Magic || ours.Version != theirs.Version {
-		return nil, errors.New("incompatible wire protocol")
+	if err = verifyProtocol(ours, theirs); err != nil {
+		return nil, err
 	}
 
 	conn.Send(ours)
