@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 	"crypto/tls"
+	"github.com/golang/protobuf/proto"
 )
 
 type IdentityMap map[string]*Identity
@@ -132,6 +133,10 @@ func main() {
 			peer := &Peer{conn: conn, rxChannel: &messageEvents, disconnectChannel: &disconnectionEvents}
 			activePeers[conn.Id.Id] = *peer
 			peer.Run()
+
+			mode := Heartbeat_PING
+			msg := &Heartbeat{Mode: &mode}
+			peer.Send(msg)
 		case msg := <-messageEvents:
 			fmt.Printf("received msg: %s", msg.From.Id())
 		case peerId := <-disconnectionEvents:
