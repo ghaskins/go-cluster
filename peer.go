@@ -50,7 +50,12 @@ func (self *Peer) rxLoop() error {
 		}
 
 		if err := self.conn.Recv(payload); err != nil {
-			return errors.New(fmt.Sprintf("payload recv error %s", err.Error()))
+			switch {
+			case err == io.EOF:
+				return nil
+			default:
+				return errors.New(fmt.Sprintf("payload recv error %s", err.Error()))
+			}
 		}
 
 		*self.rxChannel <- Message{From: self, Payload: payload}
