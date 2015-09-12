@@ -10,6 +10,8 @@ It is generated from these files:
 
 It has these top-level messages:
 	Negotiate
+	Header
+	Heartbeat
 */
 package main
 
@@ -21,6 +23,69 @@ import math "math"
 var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
+
+type Type int32
+
+const (
+	Type_HEARTBEAT Type = 1
+)
+
+var Type_name = map[int32]string{
+	1: "HEARTBEAT",
+}
+var Type_value = map[string]int32{
+	"HEARTBEAT": 1,
+}
+
+func (x Type) Enum() *Type {
+	p := new(Type)
+	*p = x
+	return p
+}
+func (x Type) String() string {
+	return proto.EnumName(Type_name, int32(x))
+}
+func (x *Type) UnmarshalJSON(data []byte) error {
+	value, err := proto.UnmarshalJSONEnum(Type_value, data, "Type")
+	if err != nil {
+		return err
+	}
+	*x = Type(value)
+	return nil
+}
+
+type Heartbeat_Mode int32
+
+const (
+	Heartbeat_PING Heartbeat_Mode = 1
+	Heartbeat_PONG Heartbeat_Mode = 2
+)
+
+var Heartbeat_Mode_name = map[int32]string{
+	1: "PING",
+	2: "PONG",
+}
+var Heartbeat_Mode_value = map[string]int32{
+	"PING": 1,
+	"PONG": 2,
+}
+
+func (x Heartbeat_Mode) Enum() *Heartbeat_Mode {
+	p := new(Heartbeat_Mode)
+	*p = x
+	return p
+}
+func (x Heartbeat_Mode) String() string {
+	return proto.EnumName(Heartbeat_Mode_name, int32(x))
+}
+func (x *Heartbeat_Mode) UnmarshalJSON(data []byte) error {
+	value, err := proto.UnmarshalJSONEnum(Heartbeat_Mode_value, data, "Heartbeat_Mode")
+	if err != nil {
+		return err
+	}
+	*x = Heartbeat_Mode(value)
+	return nil
+}
 
 type Negotiate struct {
 	Magic            *string  `protobuf:"bytes,1,req,name=magic" json:"magic,omitempty"`
@@ -52,4 +117,41 @@ func (m *Negotiate) GetOptions() []string {
 		return m.Options
 	}
 	return nil
+}
+
+type Header struct {
+	Type             *Type  `protobuf:"varint,1,opt,name=type,enum=main.Type" json:"type,omitempty"`
+	XXX_unrecognized []byte `json:"-"`
+}
+
+func (m *Header) Reset()         { *m = Header{} }
+func (m *Header) String() string { return proto.CompactTextString(m) }
+func (*Header) ProtoMessage()    {}
+
+func (m *Header) GetType() Type {
+	if m != nil && m.Type != nil {
+		return *m.Type
+	}
+	return Type_HEARTBEAT
+}
+
+type Heartbeat struct {
+	Mode             *Heartbeat_Mode `protobuf:"varint,1,opt,name=mode,enum=main.Heartbeat_Mode" json:"mode,omitempty"`
+	XXX_unrecognized []byte          `json:"-"`
+}
+
+func (m *Heartbeat) Reset()         { *m = Heartbeat{} }
+func (m *Heartbeat) String() string { return proto.CompactTextString(m) }
+func (*Heartbeat) ProtoMessage()    {}
+
+func (m *Heartbeat) GetMode() Heartbeat_Mode {
+	if m != nil && m.Mode != nil {
+		return *m.Mode
+	}
+	return Heartbeat_PING
+}
+
+func init() {
+	proto.RegisterEnum("main.Type", Type_name, Type_value)
+	proto.RegisterEnum("main.Heartbeat_Mode", Heartbeat_Mode_name, Heartbeat_Mode_value)
 }

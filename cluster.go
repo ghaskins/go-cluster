@@ -113,9 +113,30 @@ func main() {
 		}(*peer)
 	}
 
-	// Finally, wait for connections to come in
+	disconnectionEvents := make(DisconnectChannel)
+	messageEvents       := make(MessageChannel, 100)
+
+	activePeers := map[string]Peer{}
+
+	// Main engine
 	for {
-		conn := <-connectionEvents
-		fmt.Printf("new connection from %s\n", conn.Id.Cert.Subject.CommonName)
+		select {
+		case conn := <-connectionEvents:
+			fmt.Printf("new connection from %s\n", conn.Id.Id)
+
+			if _, ok := activePeers[conn.Id.Id]; ok {
+				fmt.Printf("client is already connected")
+				continue
+			}
+
+			peer := &Peer{conn: conn, rxChannel: &messageEvents, disconnectChannel: &disconnectionEvents}
+			activePeers[conn.Id.Id] = *peer
+			peer.Run()
+		case msg := <-messageEvents:
+			fmt.Printf("received msg: %s", msg.From.Id())
+		case peerId := <-disconnectionEvents:
+			fmt.Printf("lost connection from %s\n", peerId)
+			delete(activePeers, peerId)
+		}
 	}
 }
