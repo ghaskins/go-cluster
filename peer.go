@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"errors"
+	"io"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -30,7 +31,13 @@ func (self *Peer) rxLoop() error {
 	for {
 		header := &Header{}
 		if err := self.conn.Recv(header); err != nil {
-			return errors.New(fmt.Sprintf("header recv error %s", err.Error()))
+			switch {
+			case err == io.EOF:
+				return nil
+			default:
+				return errors.New(fmt.Sprintf("header recv error %s", err.Error()))
+			}
+
 		}
 
 		var payload proto.Message
