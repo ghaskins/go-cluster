@@ -6,7 +6,6 @@ import (
 	"log"
 	"time"
 	"crypto/tls"
-	"github.com/golang/protobuf/proto"
 )
 
 type IdentityMap map[string]*Identity
