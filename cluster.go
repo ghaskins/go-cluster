@@ -137,7 +137,7 @@ func main() {
 			msg := &Heartbeat{Mode: &mode}
 			peer.Send(msg)
 		case msg := <-messageEvents:
-			fmt.Printf("received msg: %s", msg.From.Id())
+			fmt.Printf("received msg: %s\n", msg.From.Id())
 		case peerId := <-disconnectionEvents:
 			fmt.Printf("lost connection from %s\n", peerId)
 			delete(activePeers, peerId)

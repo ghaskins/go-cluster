@@ -13,7 +13,7 @@ type DisconnectChannel chan string
 type Peer struct {
 	conn              *Connection
 	rxChannel         *MessageChannel
-	txChannel          chan *proto.Message
+	txChannel          chan proto.Message
 	disconnectChannel *DisconnectChannel
 }
 
@@ -71,44 +71,30 @@ func (self *Peer) runRx() {
 	*self.disconnectChannel <- self.conn.Id.Id
 }
 
-/*
+
 func (self *Peer) runTx() {
 	for {
 		msg := <- self.txChannel
 		var t Type
 
 		switch msg.(type) {
-		case Heartbeat:
+		case *Heartbeat:
 			t = Type_HEARTBEAT
 		}
 
 		header := &Header{Type: &t}
 		self.conn.Send(header)
-		self.conn.Send(*msg)
+		self.conn.Send(msg)
 	}
 }
-*/
 
 func (self *Peer) Run() {
-	self.txChannel = make(chan *proto.Message, 100)
+	self.txChannel = make(chan proto.Message, 100)
 	go self.runRx()
-	//go self.runTx()
+	go self.runTx()
 }
 
 func (self *Peer) Send(msg proto.Message) {
-
-	var t Type
-
-	switch msg.(type) {
-	//case Heartbeat:
-	default:
-		t = Type_HEARTBEAT
-	}
-
-	header := &Header{Type: &t}
-	self.conn.Send(header)
-	self.conn.Send(msg)
-
 	// We send it indirectly on a channel so that the header+payload transfer is atomic
-	//self.txChannel <- msg
+	self.txChannel <- msg
 }
