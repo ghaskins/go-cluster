@@ -14,6 +14,7 @@ type Peer struct {
 	conn              *Connection
 	rxChannel         *MessageChannel
 	txChannel          chan proto.Message
+	txStop             chan bool
 	disconnectChannel *DisconnectChannel
 }
 
@@ -69,27 +70,33 @@ func (self *Peer) runRx() {
 	}
 
 	*self.disconnectChannel <- self.conn.Id.Id
+	self.txStop <- true
 }
 
 
 func (self *Peer) runTx() {
 	for {
-		msg := <- self.txChannel
-		var t Type
+		select {
+		case msg := <-self.txChannel:
+			var t Type
 
-		switch msg.(type) {
-		case *Heartbeat:
-			t = Type_HEARTBEAT
+			switch msg.(type) {
+			case *Heartbeat:
+				t = Type_HEARTBEAT
+			}
+
+			header := &Header{Type: &t}
+			self.conn.Send(header)
+			self.conn.Send(msg)
+		case _ = <-self.txStop:
+			return
 		}
-
-		header := &Header{Type: &t}
-		self.conn.Send(header)
-		self.conn.Send(msg)
 	}
 }
 
 func (self *Peer) Run() {
 	self.txChannel = make(chan proto.Message, 100)
+	self.txStop    = make(chan bool)
 	go self.runRx()
 	go self.runTx()
 }
