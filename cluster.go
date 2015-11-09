@@ -60,7 +60,7 @@ func main() {
 		panic(err)
 	}
 
-	connectionEvents := make(chan *Connection)
+	controller := NewController(allPeers)
 
 	// First start our primary listener if we have at least one client of our server
 	if len(serverPeers) > 0 {
@@ -83,7 +83,7 @@ func main() {
 				// Check to see if the connection is related to a peer we expect to be connecting
 				// to us as a client
 				if _, ok := serverPeers[conn.Id.Id]; ok {
-					connectionEvents <- conn
+					controller.Connect(conn)
 				} else {
 					log.Printf("Dropping unknown peer %v", conn.Id)
 				}
@@ -109,38 +109,9 @@ func main() {
 				time.Sleep(time.Duration(5)*time.Second)
 			}
 
-			connectionEvents <- conn
+			controller.Connect(conn)
 		}(*peer)
 	}
 
-	disconnectionEvents := make(DisconnectChannel)
-	messageEvents       := make(MessageChannel, 100)
-
-	activePeers := map[string]Peer{}
-
-	// Main engine
-	for {
-		select {
-		case conn := <-connectionEvents:
-			fmt.Printf("new connection from %s\n", conn.Id.Id)
-
-			if _, ok := activePeers[conn.Id.Id]; ok {
-				fmt.Printf("client is already connected")
-				continue
-			}
-
-			peer := &Peer{conn: conn, rxChannel: &messageEvents, disconnectChannel: &disconnectionEvents}
-			activePeers[conn.Id.Id] = *peer
-			peer.Run()
-
-			mode := Heartbeat_PING
-			msg := &Heartbeat{Mode: &mode}
-			peer.Send(msg)
-		case msg := <-messageEvents:
-			fmt.Printf("received msg: %s\n", msg.From.Id())
-		case peerId := <-disconnectionEvents:
-			fmt.Printf("lost connection from %s\n", peerId)
-			delete(activePeers, peerId)
-		}
-	}
+	controller.Run()
 }
