@@ -60,7 +60,7 @@ func main() {
 		panic(err)
 	}
 
-	controller := NewController(allPeers)
+	controller := NewController(self, allPeers)
 
 	// First start our primary listener if we have at least one client of our server
 	if len(serverPeers) > 0 {

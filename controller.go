@@ -9,13 +9,15 @@ type Controller struct {
 	state             fsm.FSM
 	connectionEvents  chan *Connection
 	peers             IdentityMap
+	id                *Identity
 	activePeers       map[string]Peer
 }
 
-func NewController(_peers IdentityMap) *Controller {
+func NewController(_id *Identity, _peers IdentityMap) *Controller {
 	return &Controller{
 		connectionEvents: make(chan *Connection),
 		peers: _peers,
+		id: _id,
 		activePeers: make(map[string]Peer),
 	}
 }
