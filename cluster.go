@@ -1,11 +1,11 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"log"
 	"time"
-	"crypto/tls"
 )
 
 type IdentityMap map[string]*Identity
@@ -15,7 +15,7 @@ func main() {
 	privateKey := flag.String("key", "key0.pem", "the path to our private key")
 	certsPath := flag.String("certs", "certs.conf", "the path to our membership definition")
 
-	flag.Parse();
+	flag.Parse()
 	fmt.Printf("id: %d, privatekey: %s, config: %s\n", *id, *privateKey, *certsPath)
 
 	certs, err := ParseCertificates(*certsPath)
@@ -27,7 +27,7 @@ func main() {
 		log.Fatalf("Invalid index")
 	}
 
-	allPeers    := IdentityMap{}
+	allPeers := IdentityMap{}
 	clientPeers := IdentityMap{}
 	serverPeers := IdentityMap{}
 
@@ -40,7 +40,7 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Using %s - %s with peers:\n" , self.Cert.Subject.CommonName, self.Id)
+	fmt.Printf("Using %s - %s with peers:\n", self.Cert.Subject.CommonName, self.Id)
 
 	for _, peer := range allPeers {
 		fmt.Printf("\t%s - %s (", peer.Cert.Subject.CommonName, peer.Id)
@@ -60,7 +60,7 @@ func main() {
 		panic(err)
 	}
 
-	controller := NewController(self, allPeers)
+	controller := NewController(self.Id, allPeers)
 
 	// First start our primary listener if we have at least one client of our server
 	if len(serverPeers) > 0 {
@@ -106,7 +106,7 @@ func main() {
 				if err == nil {
 					break
 				}
-				time.Sleep(time.Duration(5)*time.Second)
+				time.Sleep(time.Duration(5) * time.Second)
 			}
 
 			controller.Connect(conn)

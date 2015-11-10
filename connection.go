@@ -2,17 +2,17 @@ package main
 
 import (
 	"crypto/tls"
-	"errors"
-	"net"
-	"fmt"
-	"strings"
-	"github.com/golang/protobuf/proto"
 	"encoding/binary"
+	"errors"
+	"fmt"
+	"github.com/golang/protobuf/proto"
+	"net"
+	"strings"
 )
 
 type Connection struct {
 	Conn *tls.Conn
-	Id *Identity
+	Id   *Identity
 }
 
 func (c *Connection) Send(m proto.Message) error {

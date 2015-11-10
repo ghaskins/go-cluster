@@ -1,13 +1,13 @@
 package main
 
 import (
-	"crypto/x509"
 	"crypto/sha256"
+	"crypto/x509"
 	"fmt"
 )
 
 type Identity struct {
-	Id string
+	Id   string
 	Cert *x509.Certificate
 }
 

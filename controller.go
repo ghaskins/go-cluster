@@ -1,80 +1,63 @@
 package main
 
 import (
-	"fmt"
-	"math"
-	"time"
 	"crypto/rand"
-	"github.com/looplab/fsm"
+	"fmt"
 	"github.com/golang/protobuf/proto"
+	"github.com/looplab/fsm"
+	"time"
 )
 
-type View struct {
-	id int
-	leader string
-}
-
-type Votes map[string]*Vote
-
 type Controller struct {
-	state             fsm.FSM
-	connectionEvents  chan *Connection
-	peers             IdentityMap
-	myId             *Identity
-	activePeers       map[string]Peer
-	quorumThreshold   int
-	view              View
+	state            *fsm.FSM
+	connectionEvents chan *Connection
+	peers            IdentityMap
+	myId             string
+	activePeers      map[string]Peer
+	quorumThreshold  int
+	viewId           int64
 	timer            *time.Timer
-	votes             Votes
 	electionManager  *ElectionManager
 }
 
-func NewController(_id *Identity, _peers IdentityMap) *Controller {
+func NewController(_id string, _peers IdentityMap) *Controller {
 
 	var members []string
 
-	for _,peer := range _peers {
-		append(members, peer.Id)
+	for _, peer := range _peers {
+		members = append(members, peer.Id)
 	}
 
 	self := &Controller{
 		connectionEvents: make(chan *Connection),
-		peers: _peers,
-		myId: _id,
-		activePeers: make(map[string]Peer),
-		quorumThreshold: ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
-		timer: make(chan time.Time),
-		votes: make(Votes),
-		electionManager: NewElectionManager(_id, members),
+		peers:            _peers,
+		myId:             _id,
+		activePeers:      make(map[string]Peer),
+		quorumThreshold:  ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
+		electionManager:  NewElectionManager(_id, members),
 	}
 
-
 	self.state = fsm.NewFSM(
-		"sensing",
+		"initializing",
 		fsm.Events{
-			{Name: "quorum-acquired", Src: []string{"sensing"},  Dst: "following"},
-			{Name: "quorum-lost",   						   Dst: "sensing"},
-			{Name: "elected-self",       Src: []string{"sensing", "electing"}, Dst: "leading"},
-			{Name: "elected-other",       Src: []string{"sensing", "electing"}, Dst: "following"},
-			{Name: "timeout",       Src: []string{"following"}, Dst: "electing"},
-			{Name: "election",       Src: []string{"sensing", "following", "leading"}, Dst: "electing"},
-
-			{Name: "candidate",       Src: []string{"following"}, Dst: "candidate"},
-			{Name: "ping",          Src: []string{"following", "candidate"}, Dst: "following"},
-			{Name: "ping",          Src: []string{"leading"}, Dst: "candidate"},
-			{Name: "elected",       Src: []string{"candidate"}, Dst: "leading"},
-			{Name: "yield",         Src: []string{"candidate"}, Dst: "following"},
-			{Name: "vote",          Src: []string{"leading"}, Dst: "candidate"},
+			{Name: "elected-self", Src: []string{"initializing", "electing"}, Dst: "leading"},
+			{Name: "elected-other", Src: []string{"initializing", "electing"}, Dst: "following"},
+			{Name: "timeout", Src: []string{"initializing", "following"}, Dst: "electing"},
+			{Name: "election", Src: []string{"following", "leading"}, Dst: "electing"},
+			{Name: "heartbeat", Src: []string{"following"}, Dst: "following"},
 		},
 		fsm.Callbacks{
-			"enter_following": func(e *fsm.Event) { self.rearmTimer() },
-			"leave_following": func(e *fsm.Event) { self.timer.Stop() },
-
+			"enter_initializing": func(e *fsm.Event) { self.rearmTimer() },
+			"leave_initializing": func(e *fsm.Event) { self.timer.Stop() },
+			"enter_following":    func(e *fsm.Event) { self.rearmTimer() },
+			"leave_following":    func(e *fsm.Event) { self.timer.Stop() },
+			"heartbeat":          func(e *fsm.Event) { self.onHeartBeat(e.Args[0].(string), e.Args[1].(int64)) },
+			"electing":           func(e *fsm.Event) { self.onElecting() },
+			"timeout":            func(e *fsm.Event) { self.onTimeout() },
 		},
 	)
 
 	return self
-
 }
 
 func (self *Controller) Connect(conn *Connection) {
@@ -84,7 +67,7 @@ func (self *Controller) Connect(conn *Connection) {
 func (self *Controller) Run() {
 
 	disconnectionEvents := make(DisconnectChannel)
-	messageEvents       := make(MessageChannel, 100)
+	messageEvents := make(MessageChannel, 100)
 
 	// Main engine
 	for {
@@ -105,15 +88,16 @@ func (self *Controller) Run() {
 			self.activePeers[conn.Id.Id] = *peer
 			peer.Run()
 
-			if (len(self.activePeers) == self.quorumThreshold) {
+			if len(self.activePeers) == self.quorumThreshold {
 				self.state.Event("quorum-acquired")
 			}
 
 			// Update the peer with an unsolicited vote if we already have an opinion on who is leader
-			if self.view.leader != nil {
+			leader, err := self.electionManager.Current()
+			if err != nil {
 				msg := &Vote{
-					ViewId: self.view.id,
-					PeerId: self.view.leader,
+					ViewId: &self.viewId,
+					PeerId: &leader,
 				}
 				peer.Send(msg)
 			}
@@ -125,10 +109,10 @@ func (self *Controller) Run() {
 			switch _msg.Payload.(type) {
 			case *Heartbeat:
 				msg := *Heartbeat(_msg.Payload)
-				self.onHeartBeat(_msg.From.Id(), msg.GetViewId())
+				self.state.Event("heartbeat", _msg.From.Id(), msg.GetViewId())
 			case *Vote:
 				msg := *Vote(_msg.Payload)
-				self.electionManager.Vote(_msg.From.Id(), msg)
+				self.electionManager.ProcessVote(_msg.From.Id(), msg)
 			}
 
 		//---------------------------------------------------------
@@ -138,17 +122,18 @@ func (self *Controller) Run() {
 
 			if val {
 				// val == true means we elected a new leader
-				self.view.leader = self.electionManager.Current()
-				if self.view.leader == self.myId {
-					self.state.Event("elected-self")
-				} else {
-					self.state.Event("elected-other")
+				leader, err := self.electionManager.Current()
+				if err != nil {
+					if leader == self.myId {
+						self.state.Event("elected-self")
+					} else {
+						self.state.Event("elected-other")
+					}
 				}
 			} else {
 				// val == false means we started a new election
 				self.state.Event("election")
 			}
-
 
 		//---------------------------------------------------------
 		// timeouts
@@ -161,7 +146,7 @@ func (self *Controller) Run() {
 		//---------------------------------------------------------
 		case peerId := <-disconnectionEvents:
 			fmt.Printf("lost connection from %s\n", peerId)
-			if (len(self.activePeers) == self.quorumThreshold) {
+			if len(self.activePeers) == self.quorumThreshold {
 				self.state.Event("quorum-lost")
 			}
 			delete(self.activePeers, peerId)
@@ -171,7 +156,7 @@ func (self *Controller) Run() {
 }
 
 func (self *Controller) rearmTimer() {
-	offset,err := rand.Int(rand.Reader, 150)
+	offset, err := rand.Int(rand.Reader, 150)
 	if err != nil {
 		panic("bad return from rand.Int")
 	}
@@ -180,39 +165,38 @@ func (self *Controller) rearmTimer() {
 }
 
 func (self *Controller) onHeartBeat(from string, viewId int64) {
-	switch self.state.Current() {
-	case "following":
+	leader, err := self.electionManager.Current()
+	if err == nil {
+		panic(err)
+	}
 
-		// Only pet the watchdog if the HB originated from the node we believe to be the leader
-		if (from == self.view.leader && viewId == self.view.id) {
-			self.rearmTimer()
-		}
-
-	default:
-		// ignore
+	// Only pet the watchdog if the HB originated from the node we believe to be the leader
+	if from == leader && viewId == self.viewId {
+		self.rearmTimer()
 	}
 }
 
 func (self *Controller) onTimeout() {
 
-	if len(self.votes) == 0 {
-		// become a candidate to propose an election to our peers
-		vote := &Vote{ViewId: self.view.id, PeerId: self.myId.Id}
+	if self.electionManager.VoteCount() == 0 {
+		vote := &Vote{ViewId: self.viewId + 1, PeerId: self.myId}
 
-		self.view.id++
-		self.votes[self.myId] = vote
-		self.broadcast(vote)
-		self.state.Event("candidate")
-	} else {
+		self.electionManager.ProcessVote(self.myId, vote)
+	}
+}
 
-		// There seems to be an election already under way, lets just join it
-		self.election()
+func (self *Controller) onElecting() {
+
+	vote, err := self.electionManager.GetContender()
+	if err != nil {
+		panic(err)
 	}
 
+	self.broadcast(vote)
 }
 
 func (self *Controller) broadcast(msg proto.Message) {
-	for _,peer := range self.activePeers {
+	for _, peer := range self.activePeers {
 		peer.Send(msg)
 	}
 }

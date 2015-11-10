@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"errors"
-	"io"
+	"fmt"
 	"github.com/golang/protobuf/proto"
+	"io"
 )
 
 type MessageChannel chan Message
@@ -13,8 +13,8 @@ type DisconnectChannel chan string
 type Peer struct {
 	conn              *Connection
 	rxChannel         *MessageChannel
-	txChannel          chan proto.Message
-	txStop             chan bool
+	txChannel         chan proto.Message
+	txStop            chan bool
 	disconnectChannel *DisconnectChannel
 }
 
@@ -75,7 +75,6 @@ func (self *Peer) runRx() {
 	self.txStop <- true
 }
 
-
 func (self *Peer) runTx() {
 	for {
 		select {
@@ -100,7 +99,7 @@ func (self *Peer) runTx() {
 
 func (self *Peer) Run() {
 	self.txChannel = make(chan proto.Message, 100)
-	self.txStop    = make(chan bool)
+	self.txStop = make(chan bool)
 	go self.runRx()
 	go self.runTx()
 }
