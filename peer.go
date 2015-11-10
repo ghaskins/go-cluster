@@ -46,6 +46,8 @@ func (self *Peer) rxLoop() error {
 		switch header.GetType() {
 		case Type_HEARTBEAT:
 			payload = new(Heartbeat)
+		case Type_VOTE:
+			payload = new(Vote)
 		default:
 			continue
 		}
@@ -83,6 +85,8 @@ func (self *Peer) runTx() {
 			switch msg.(type) {
 			case *Heartbeat:
 				t = Type_HEARTBEAT
+			case *Vote:
+				t = Type_VOTE
 			}
 
 			header := &Header{Type: &t}
