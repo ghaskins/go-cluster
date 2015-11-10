@@ -35,9 +35,11 @@ func NewController(_id string, _peers IdentityMap) *Controller {
 		myId:             _id,
 		activePeers:      make(map[string]Peer),
 		quorumThreshold:  ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
-		timer:            new(time.Timer),
+		timer:            time.NewTimer(0),
 		electionManager:  NewElectionManager(_id, members),
 	}
+
+	<-self.timer.C // drain the initial event
 
 	self.state = fsm.NewFSM(
 		"initializing",
@@ -55,7 +57,7 @@ func NewController(_id string, _peers IdentityMap) *Controller {
 			"leave_following":    func(e *fsm.Event) { self.timer.Stop() },
 			"heartbeat":          func(e *fsm.Event) { self.onHeartBeat(e.Args[0].(string), e.Args[1].(int64)) },
 			"electing":           func(e *fsm.Event) { self.onElecting() },
-			"timeout":            func(e *fsm.Event) { self.onTimeout() },
+			"before_timeout":     func(e *fsm.Event) { self.onTimeout() },
 		},
 	)
 
@@ -141,6 +143,7 @@ func (self *Controller) Run() {
 		// timeouts
 		//---------------------------------------------------------
 		case _ = <-self.timer.C:
+			fmt.Printf("timeout\n")
 			self.state.Event("timeout")
 
 		//---------------------------------------------------------
@@ -180,6 +183,8 @@ func (self *Controller) onHeartBeat(from string, viewId int64) {
 
 func (self *Controller) onTimeout() {
 
+	fmt.Printf("onTimeout\n")
+
 	if self.electionManager.VoteCount() == 0 {
 		nextViewId := self.viewId + 1
 		vote := &Vote{ViewId: &nextViewId, PeerId: &self.myId}
@@ -189,7 +194,7 @@ func (self *Controller) onTimeout() {
 }
 
 func (self *Controller) onElecting() {
-
+	fmt.Printf("onElecting\n")
 	vote, err := self.electionManager.GetContender()
 	if err != nil {
 		panic(err)

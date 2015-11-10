@@ -23,7 +23,7 @@ func NewElectionManager(_myId string, _members []string) *ElectionManager {
 		members:   _members,
 		votes:     make(Votes),
 		threshold: ComputeQuorumThreshold(len(_members)),
-		C:         make(chan bool),
+		C:         make(chan bool, 100),
 	}
 
 	self.state = fsm.NewFSM(
