@@ -34,12 +34,10 @@ func NewController(_id string, _peers IdentityMap) *Controller {
 		peers:            _peers,
 		myId:             _id,
 		activePeers:      make(map[string]Peer),
-		quorumThreshold:  ComputeQuorumThreshold(len(_peers)) - 1,  // We don't include ourselves
-		timer:            time.NewTimer(time.Second * 1000000), // set it very large to give us a chance to stop it
+		quorumThreshold:  ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
+		timer:            new(time.Timer),
 		electionManager:  NewElectionManager(_id, members),
 	}
-
-	self.timer.Stop()
 
 	self.state = fsm.NewFSM(
 		"initializing",
