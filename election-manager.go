@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"errors"
 	"github.com/looplab/fsm"
 )
@@ -92,6 +93,9 @@ func (self *ElectionManager) GetContender() (*Vote, error) {
 }
 
 func (self *ElectionManager) ProcessVote(from string, vote *Vote) {
+
+	fmt.Printf("vote for %s from %s", vote.GetPeerId(), from)
+
 	prevCount := len(self.votes)
 	isFirst := prevCount == 0
 
