@@ -142,7 +142,7 @@ func (self *Controller) rearmTimer() {
 		panic("bad return from rand.Int")
 	}
 
-	self.timer = time.NewTimer(time.Millisecond * 150 + offset).C
+	self.timer = time.NewTimer(time.Millisecond * (150 + offset)).C
 }
 
 func (self *Controller) onHeartBeat(from string, viewId int64) {
