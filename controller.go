@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/looplab/fsm"
-	"time"
 	"math/big"
+	"time"
 )
 
 type Controller struct {
@@ -34,9 +34,12 @@ func NewController(_id string, _peers IdentityMap) *Controller {
 		peers:            _peers,
 		myId:             _id,
 		activePeers:      make(map[string]Peer),
-		quorumThreshold:  ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
+		quorumThreshold:  ComputeQuorumThreshold(len(_peers)) - 1,  // We don't include ourselves
+		timer:            time.NewTimer(time.Second * 1000000), // set it very large to give us a chance to stop it
 		electionManager:  NewElectionManager(_id, members),
 	}
+
+	self.timer.Stop()
 
 	self.state = fsm.NewFSM(
 		"initializing",
@@ -162,7 +165,7 @@ func (self *Controller) rearmTimer() {
 		panic("bad return from rand.Int")
 	}
 
-	self.timer = time.NewTimer(time.Millisecond * time.Duration(150 + offset.Int64()))
+	self.timer.Reset(time.Millisecond * time.Duration(150+offset.Int64()))
 }
 
 func (self *Controller) onHeartBeat(from string, viewId int64) {
