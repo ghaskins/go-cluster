@@ -11,7 +11,7 @@ import (
 
 type View struct {
 	id int
-	leader *Identity
+	leader string
 }
 
 type Votes map[string]*Vote
@@ -26,35 +26,49 @@ type Controller struct {
 	view              View
 	timer            *time.Timer
 	votes             Votes
+	electionManager  *ElectionManager
 }
 
 func NewController(_id *Identity, _peers IdentityMap) *Controller {
+
+	var members []string
+
+	for _,peer := range _peers {
+		append(members, peer.Id)
+	}
+
 	self := &Controller{
 		connectionEvents: make(chan *Connection),
 		peers: _peers,
 		myId: _id,
 		activePeers: make(map[string]Peer),
-		quorumThreshold: int(math.Ceil(len(_peers) / 2.0)) - 1, // We don't include ourselves
+		quorumThreshold: ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
 		timer: make(chan time.Time),
 		votes: make(Votes),
+		electionManager: NewElectionManager(_id, members),
 	}
 
 
 	self.state = fsm.NewFSM(
 		"sensing",
 		fsm.Events{
-			{Name: "member-quorum-acquired", Src: []string{"sensing"},  Dst: "follower"},
-			{Name: "member-quorum-lost",   						   Dst: "sensing"},
-			{Name: "candidate",       Src: []string{"follower"}, Dst: "candidate"},
-			{Name: "ping",          Src: []string{"follower", "candidate"}, Dst: "follower"},
-			{Name: "ping",          Src: []string{"leader"}, Dst: "candidate"},
-			{Name: "elected",       Src: []string{"candidate"}, Dst: "leader"},
-			{Name: "yield",         Src: []string{"candidate"}, Dst: "follower"},
-			{Name: "vote",          Src: []string{"leader"}, Dst: "candidate"},
+			{Name: "quorum-acquired", Src: []string{"sensing"},  Dst: "following"},
+			{Name: "quorum-lost",   						   Dst: "sensing"},
+			{Name: "elected-self",       Src: []string{"sensing", "electing"}, Dst: "leading"},
+			{Name: "elected-other",       Src: []string{"sensing", "electing"}, Dst: "following"},
+			{Name: "timeout",       Src: []string{"following"}, Dst: "electing"},
+			{Name: "election",       Src: []string{"sensing", "following", "leading"}, Dst: "electing"},
+
+			{Name: "candidate",       Src: []string{"following"}, Dst: "candidate"},
+			{Name: "ping",          Src: []string{"following", "candidate"}, Dst: "following"},
+			{Name: "ping",          Src: []string{"leading"}, Dst: "candidate"},
+			{Name: "elected",       Src: []string{"candidate"}, Dst: "leading"},
+			{Name: "yield",         Src: []string{"candidate"}, Dst: "following"},
+			{Name: "vote",          Src: []string{"leading"}, Dst: "candidate"},
 		},
 		fsm.Callbacks{
-			"enter_follower": func(e *fsm.Event) { self.rearmTimer() },
-			"leave_follower": func(e *fsm.Event) { self.timer.Stop() },
+			"enter_following": func(e *fsm.Event) { self.rearmTimer() },
+			"leave_following": func(e *fsm.Event) { self.timer.Stop() },
 
 		},
 	)
@@ -92,14 +106,14 @@ func (self *Controller) Run() {
 			peer.Run()
 
 			if (len(self.activePeers) == self.quorumThreshold) {
-				self.state.Event("member-quorum-acquired")
+				self.state.Event("quorum-acquired")
 			}
 
 			// Update the peer with an unsolicited vote if we already have an opinion on who is leader
 			if self.view.leader != nil {
 				msg := &Vote{
 					ViewId: self.view.id,
-					PeerId: self.view.leader.Id,
+					PeerId: self.view.leader,
 				}
 				peer.Send(msg)
 			}
@@ -114,14 +128,33 @@ func (self *Controller) Run() {
 				self.onHeartBeat(_msg.From.Id(), msg.GetViewId())
 			case *Vote:
 				msg := *Vote(_msg.Payload)
-				self.onVote(_msg.From.Id(), msg)
+				self.electionManager.Vote(_msg.From.Id(), msg)
 			}
+
+		//---------------------------------------------------------
+		// leader election
+		//---------------------------------------------------------
+		case val := <-self.electionManager.C:
+
+			if val {
+				// val == true means we elected a new leader
+				self.view.leader = self.electionManager.Current()
+				if self.view.leader == self.myId {
+					self.state.Event("elected-self")
+				} else {
+					self.state.Event("elected-other")
+				}
+			} else {
+				// val == false means we started a new election
+				self.state.Event("election")
+			}
+
 
 		//---------------------------------------------------------
 		// timeouts
 		//---------------------------------------------------------
 		case _ := <-self.timer:
-			self.onTimeout()
+			self.state.Event("timeout")
 
 		//---------------------------------------------------------
 		// disconnects
@@ -129,9 +162,10 @@ func (self *Controller) Run() {
 		case peerId := <-disconnectionEvents:
 			fmt.Printf("lost connection from %s\n", peerId)
 			if (len(self.activePeers) == self.quorumThreshold) {
-				self.state.Event("member-quorum-lost")
+				self.state.Event("quorum-lost")
 			}
 			delete(self.activePeers, peerId)
+			self.electionManager.Invalidate(peerId)
 		}
 	}
 }
@@ -147,49 +181,15 @@ func (self *Controller) rearmTimer() {
 
 func (self *Controller) onHeartBeat(from string, viewId int64) {
 	switch self.state.Current() {
-	case "follower":
+	case "following":
 
 		// Only pet the watchdog if the HB originated from the node we believe to be the leader
-		if (from == self.view.leader.Id && viewId == self.view.id) {
+		if (from == self.view.leader && viewId == self.view.id) {
 			self.rearmTimer()
 		}
 
 	default:
 		// ignore
-	}
-}
-
-func (self *Controller) election() {
-	results := make(map[string]int)
-
-	// First aggregate the votes by peerId
-	for _,peerId := range self.votes {
-		results[peerId]++;
-	}
-
-	// We will vote for the entry with the highest accumulated votes
-
-	self.votes = make(Votes) // clear any outstanding votes
-}
-
-func (self *Controller) onVote(from string, vote *Vote) {
-
-	prevCount := len(self.votes)
-	isFirst := prevCount == 0
-
-	self.votes[from] = vote
-	if isFirst {
-		self.votes[self.myId] = vote // This gives extra weight to the first received vote
-	}
-
-	currCount := len(self.votes)
-
-	// +2 because we do not want to include our local vote (added above) and we want it to be greater than..
-	if prevCount != currCount && currCount == (self.quorumThreshold + 2) {
-		// Hmmm, enough nodes are complaining about the leader that we should force a re-election even
-		// though the timeout has not affected us yet
-
-		self.state.Event("election-quorum")
 	}
 }
 
