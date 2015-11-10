@@ -6,6 +6,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/looplab/fsm"
 	"time"
+	"math/big"
 )
 
 type Controller struct {
@@ -108,10 +109,10 @@ func (self *Controller) Run() {
 		case _msg := <-messageEvents:
 			switch _msg.Payload.(type) {
 			case *Heartbeat:
-				msg := *Heartbeat(_msg.Payload)
+				msg := _msg.Payload.(*Heartbeat)
 				self.state.Event("heartbeat", _msg.From.Id(), msg.GetViewId())
 			case *Vote:
-				msg := *Vote(_msg.Payload)
+				msg := _msg.Payload.(*Vote)
 				self.electionManager.ProcessVote(_msg.From.Id(), msg)
 			}
 
@@ -138,7 +139,7 @@ func (self *Controller) Run() {
 		//---------------------------------------------------------
 		// timeouts
 		//---------------------------------------------------------
-		case _ := <-self.timer:
+		case _ = <-self.timer.C:
 			self.state.Event("timeout")
 
 		//---------------------------------------------------------
@@ -156,12 +157,12 @@ func (self *Controller) Run() {
 }
 
 func (self *Controller) rearmTimer() {
-	offset, err := rand.Int(rand.Reader, 150)
+	offset, err := rand.Int(rand.Reader, big.NewInt(150))
 	if err != nil {
 		panic("bad return from rand.Int")
 	}
 
-	self.timer = time.NewTimer(time.Millisecond * (150 + offset)).C
+	self.timer = time.NewTimer(time.Millisecond * int64(150 + offset.Int64()))
 }
 
 func (self *Controller) onHeartBeat(from string, viewId int64) {
@@ -179,7 +180,8 @@ func (self *Controller) onHeartBeat(from string, viewId int64) {
 func (self *Controller) onTimeout() {
 
 	if self.electionManager.VoteCount() == 0 {
-		vote := &Vote{ViewId: self.viewId + 1, PeerId: self.myId}
+		nextViewId := self.viewId + 1
+		vote := &Vote{ViewId: &nextViewId, PeerId: &self.myId}
 
 		self.electionManager.ProcessVote(self.myId, vote)
 	}

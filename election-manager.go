@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"github.com/looplab/fsm"
-	"math"
 )
 
 type Votes map[string]*Vote
@@ -35,7 +34,7 @@ func NewElectionManager(_myId string, _members []string) *ElectionManager {
 		},
 		fsm.Callbacks{
 			"electing": func(e *fsm.Event) { self.C <- false },
-			"elected":  func(e *fsm.Event) { self.onElected(e.Args[0]) },
+			"elected":  func(e *fsm.Event) { self.onElected(e.Args[0].(string)) },
 		},
 	)
 
@@ -47,7 +46,7 @@ func (self *ElectionManager) Current() (string, error) {
 	case "complete":
 		return self.leader, nil
 	default:
-		return nil, errors.New("leader unknown")
+		return "", errors.New("leader unknown")
 	}
 
 }
@@ -62,26 +61,29 @@ func (self *ElectionManager) VoteCount() int {
 
 func (self *ElectionManager) GetContender() (*Vote, error) {
 	if len(self.votes) == 0 {
-		return errors.New("no candidates present")
+		return nil, errors.New("no candidates present")
 	}
 
 	results := make(map[string]int)
 
-	var max int32
+	var max int
 
 	// Accumulate all the votes by peer, and make note of the largest
 	for _, vote := range self.votes {
 		peerId := vote.GetPeerId()
-		result := &results[peerId]
+		result := results[peerId]
 		result++
+		results[peerId] = result
 
-		max = math.MaxInt64(max, result)
+		if result > max {
+			max = result
+		}
 	}
 
 	// Now go find the first entry with the same max
 	for peerId, votes := range results {
 		if votes == max {
-			return peerId, nil
+			return self.votes[peerId], nil
 		}
 	}
 
@@ -110,8 +112,9 @@ func (self *ElectionManager) ProcessVote(from string, vote *Vote) {
 	// only be one
 	for _, vote := range self.votes {
 		peerId := vote.GetPeerId()
-		result := &results[peerId]
+		result := results[peerId]
 		result++
+		results[peerId] = result
 		if result >= self.threshold {
 			self.state.Event("complete", peerId)
 			continue
