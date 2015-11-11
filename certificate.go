@@ -1,16 +1,16 @@
 package main
 
 import (
-	"crypto/x509"
-	"crypto/tls"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/rsa"
-	"crypto"
-	"io/ioutil"
-	"errors"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/pem"
-	"strings"
+	"errors"
+	"io/ioutil"
 	"log"
+	"strings"
 )
 
 func parseKey(path string) (crypto.PublicKey, error) {
@@ -20,7 +20,7 @@ func parseKey(path string) (crypto.PublicKey, error) {
 		return nil, errors.New("failed to open key file \"" + path + "\"")
 	}
 
-	block, _ := pem.Decode(buf);
+	block, _ := pem.Decode(buf)
 	if block.Type != "PRIVATE KEY" && strings.HasSuffix(block.Type, " PRIVATE KEY") == false {
 		return nil, errors.New("private key PEM does not appear to contain a private key blob")
 	}

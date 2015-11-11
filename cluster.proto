@@ -2,6 +2,7 @@ package main;
 
 enum Type {
     HEARTBEAT        = 1;
+    VOTE             = 2;
 }
 
 message Negotiate {
@@ -15,10 +16,10 @@ message Header {
 }
 
 message Heartbeat {
-    enum Mode {
-        PING = 1;
-        PONG = 2;
-    }
+    optional int64 viewId = 1;
+}
 
-    optional Mode mode = 1;
+message Vote {
+    optional int64  viewId = 1;
+    optional string peerId = 2;
 }

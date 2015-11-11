@@ -12,6 +12,7 @@ It has these top-level messages:
 	Negotiate
 	Header
 	Heartbeat
+	Vote
 */
 package main
 
@@ -28,13 +29,16 @@ type Type int32
 
 const (
 	Type_HEARTBEAT Type = 1
+	Type_VOTE      Type = 2
 )
 
 var Type_name = map[int32]string{
 	1: "HEARTBEAT",
+	2: "VOTE",
 }
 var Type_value = map[string]int32{
 	"HEARTBEAT": 1,
+	"VOTE":      2,
 }
 
 func (x Type) Enum() *Type {
@@ -51,39 +55,6 @@ func (x *Type) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*x = Type(value)
-	return nil
-}
-
-type Heartbeat_Mode int32
-
-const (
-	Heartbeat_PING Heartbeat_Mode = 1
-	Heartbeat_PONG Heartbeat_Mode = 2
-)
-
-var Heartbeat_Mode_name = map[int32]string{
-	1: "PING",
-	2: "PONG",
-}
-var Heartbeat_Mode_value = map[string]int32{
-	"PING": 1,
-	"PONG": 2,
-}
-
-func (x Heartbeat_Mode) Enum() *Heartbeat_Mode {
-	p := new(Heartbeat_Mode)
-	*p = x
-	return p
-}
-func (x Heartbeat_Mode) String() string {
-	return proto.EnumName(Heartbeat_Mode_name, int32(x))
-}
-func (x *Heartbeat_Mode) UnmarshalJSON(data []byte) error {
-	value, err := proto.UnmarshalJSONEnum(Heartbeat_Mode_value, data, "Heartbeat_Mode")
-	if err != nil {
-		return err
-	}
-	*x = Heartbeat_Mode(value)
 	return nil
 }
 
@@ -136,22 +107,49 @@ func (m *Header) GetType() Type {
 }
 
 type Heartbeat struct {
-	Mode             *Heartbeat_Mode `protobuf:"varint,1,opt,name=mode,enum=main.Heartbeat_Mode" json:"mode,omitempty"`
-	XXX_unrecognized []byte          `json:"-"`
+	ViewId           *int64 `protobuf:"varint,1,opt,name=viewId" json:"viewId,omitempty"`
+	XXX_unrecognized []byte `json:"-"`
 }
 
 func (m *Heartbeat) Reset()         { *m = Heartbeat{} }
 func (m *Heartbeat) String() string { return proto.CompactTextString(m) }
 func (*Heartbeat) ProtoMessage()    {}
 
-func (m *Heartbeat) GetMode() Heartbeat_Mode {
-	if m != nil && m.Mode != nil {
-		return *m.Mode
+func (m *Heartbeat) GetViewId() int64 {
+	if m != nil && m.ViewId != nil {
+		return *m.ViewId
 	}
-	return Heartbeat_PING
+	return 0
+}
+
+type Vote struct {
+	ViewId           *int64  `protobuf:"varint,1,opt,name=viewId" json:"viewId,omitempty"`
+	PeerId           *string `protobuf:"bytes,2,opt,name=peerId" json:"peerId,omitempty"`
+	XXX_unrecognized []byte  `json:"-"`
+}
+
+func (m *Vote) Reset()         { *m = Vote{} }
+func (m *Vote) String() string { return proto.CompactTextString(m) }
+func (*Vote) ProtoMessage()    {}
+
+func (m *Vote) GetViewId() int64 {
+	if m != nil && m.ViewId != nil {
+		return *m.ViewId
+	}
+	return 0
+}
+
+func (m *Vote) GetPeerId() string {
+	if m != nil && m.PeerId != nil {
+		return *m.PeerId
+	}
+	return ""
 }
 
 func init() {
+	proto.RegisterType((*Negotiate)(nil), "main.Negotiate")
+	proto.RegisterType((*Header)(nil), "main.Header")
+	proto.RegisterType((*Heartbeat)(nil), "main.Heartbeat")
+	proto.RegisterType((*Vote)(nil), "main.Vote")
 	proto.RegisterEnum("main.Type", Type_name, Type_value)
-	proto.RegisterEnum("main.Heartbeat_Mode", Heartbeat_Mode_name, Heartbeat_Mode_value)
 }
