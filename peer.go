@@ -77,13 +77,11 @@ func (self *Peer) runRx() {
 	self.txStop <- true
 }
 
-func (self *Peer) txLoop() {
-
+func (self *Peer) runTx() {
 	for {
 		select {
 		case msg := <-self.txChannel:
 
-			fmt.Printf("peer %s: transmitting\n", self.conn.Id.Id)
 			var t Type
 
 			switch msg.(type) {
@@ -100,13 +98,6 @@ func (self *Peer) txLoop() {
 			return
 		}
 	}
-}
-
-func (self *Peer) runTx() {
-
-	fmt.Printf("peer %s txLoop\n", self.conn.Id.Id)
-	self.txLoop();
-	fmt.Printf("peer %s txLoop exiting\n", self.conn.Id.Id)
 }
 
 func (self *Peer) Run() {

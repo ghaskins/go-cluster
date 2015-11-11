@@ -96,13 +96,23 @@ func (self *Controller) Run() {
 			self.state.Event("connection", conn.Id.Id)
 
 			// Update the peer with an unsolicited vote if we already have an opinion on who is leader
-			leader, err := self.electionManager.Current()
-			if err == nil {
-				msg := &Vote{
-					ViewId: &self.viewId,
-					PeerId: &leader,
+			switch self.state.Current() {
+			case "leading":
+				fallthrough
+			case "following":
+				leader, err := self.electionManager.Current()
+				if err == nil {
+					msg := &Vote{
+						ViewId: &self.viewId,
+						PeerId: &leader,
+					}
+					peer.Send(msg)
 				}
-				peer.Send(msg)
+			case "electing":
+				contender, err := self.electionManager.GetContender()
+				if err == nil {
+					peer.Send(contender)
+				}
 			}
 
 		//---------------------------------------------------------
@@ -165,7 +175,7 @@ func (self *Controller) rearmTimer() {
 		panic("bad return from rand.Int")
 	}
 
-	tmo := 150+offset.Int64()
+	tmo := 150 + offset.Int64()
 	fmt.Printf("(re)arming timer with %vms\n", tmo)
 	self.timer.Reset(time.Millisecond * time.Duration(tmo))
 }
@@ -208,9 +218,7 @@ func (self *Controller) onElecting() {
 }
 
 func (self *Controller) broadcast(msg proto.Message) {
-	fmt.Printf("broadcasting to %d active peers\n", len(self.activePeers))
 	for _, peer := range self.activePeers {
 		peer.Send(msg)
 	}
-	fmt.Printf("broadcast complete\n")
 }
