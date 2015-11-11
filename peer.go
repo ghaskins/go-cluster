@@ -29,6 +29,8 @@ func (self *Peer) Id() string {
 
 func (self *Peer) rxLoop() error {
 
+	fmt.Printf("peer %s rxLoop\n", self.conn.Id.Id)
+
 	for {
 		header := &Header{}
 		if err := self.conn.Recv(header); err != nil {
@@ -75,10 +77,13 @@ func (self *Peer) runRx() {
 	self.txStop <- true
 }
 
-func (self *Peer) runTx() {
+func (self *Peer) txLoop() {
+
 	for {
 		select {
 		case msg := <-self.txChannel:
+
+			fmt.Printf("peer %s: transmitting\n", self.conn.Id.Id)
 			var t Type
 
 			switch msg.(type) {
@@ -95,6 +100,13 @@ func (self *Peer) runTx() {
 			return
 		}
 	}
+}
+
+func (self *Peer) runTx() {
+
+	fmt.Printf("peer %s txLoop\n", self.conn.Id.Id)
+	self.txLoop();
+	fmt.Printf("peer %s txLoop exiting\n", self.conn.Id.Id)
 }
 
 func (self *Peer) Run() {

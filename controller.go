@@ -14,7 +14,7 @@ type Controller struct {
 	connectionEvents chan *Connection
 	peers            IdentityMap
 	myId             string
-	activePeers      map[string]Peer
+	activePeers      map[string]*Peer
 	quorumThreshold  int
 	viewId           int64
 	timer            *time.Timer
@@ -30,10 +30,10 @@ func NewController(_id string, _peers IdentityMap) *Controller {
 	}
 
 	self := &Controller{
-		connectionEvents: make(chan *Connection),
+		connectionEvents: make(chan *Connection, 100),
 		peers:            _peers,
 		myId:             _id,
-		activePeers:      make(map[string]Peer),
+		activePeers:      make(map[string]*Peer),
 		quorumThreshold:  ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
 		timer:            time.NewTimer(0),
 		electionManager:  NewElectionManager(_id, members),
@@ -42,8 +42,9 @@ func NewController(_id string, _peers IdentityMap) *Controller {
 	<-self.timer.C // drain the initial event
 
 	self.state = fsm.NewFSM(
-		"initializing",
+		"idle",
 		fsm.Events{
+			{Name: "connection", Src: []string{"idle"}, Dst: "initializing"},
 			{Name: "elected-self", Src: []string{"initializing", "electing"}, Dst: "leading"},
 			{Name: "elected-other", Src: []string{"initializing", "electing"}, Dst: "following"},
 			{Name: "timeout", Src: []string{"initializing", "following"}, Dst: "electing"},
@@ -70,7 +71,7 @@ func (self *Controller) Connect(conn *Connection) {
 
 func (self *Controller) Run() {
 
-	disconnectionEvents := make(DisconnectChannel)
+	disconnectionEvents := make(DisconnectChannel, 100)
 	messageEvents := make(MessageChannel, 100)
 
 	// Main engine
@@ -89,16 +90,14 @@ func (self *Controller) Run() {
 			}
 
 			peer := &Peer{conn: conn, rxChannel: &messageEvents, disconnectChannel: &disconnectionEvents}
-			self.activePeers[conn.Id.Id] = *peer
+			self.activePeers[conn.Id.Id] = peer
 			peer.Run()
 
-			if len(self.activePeers) == self.quorumThreshold {
-				self.state.Event("quorum-acquired")
-			}
+			self.state.Event("connection", conn.Id.Id)
 
 			// Update the peer with an unsolicited vote if we already have an opinion on who is leader
 			leader, err := self.electionManager.Current()
-			if err != nil {
+			if err == nil {
 				msg := &Vote{
 					ViewId: &self.viewId,
 					PeerId: &leader,
@@ -166,7 +165,9 @@ func (self *Controller) rearmTimer() {
 		panic("bad return from rand.Int")
 	}
 
-	self.timer.Reset(time.Millisecond * time.Duration(150+offset.Int64()))
+	tmo := 150+offset.Int64()
+	fmt.Printf("(re)arming timer with %vms\n", tmo)
+	self.timer.Reset(time.Millisecond * time.Duration(tmo))
 }
 
 func (self *Controller) onHeartBeat(from string, viewId int64) {
@@ -191,6 +192,8 @@ func (self *Controller) onTimeout() {
 
 		self.electionManager.ProcessVote(self.myId, vote)
 	}
+
+	self.rearmTimer()
 }
 
 func (self *Controller) onElecting() {
@@ -200,11 +203,14 @@ func (self *Controller) onElecting() {
 		panic(err)
 	}
 
+	fmt.Printf("broadcasting vote for %s\n", vote.GetPeerId())
 	self.broadcast(vote)
 }
 
 func (self *Controller) broadcast(msg proto.Message) {
+	fmt.Printf("broadcasting to %d active peers\n", len(self.activePeers))
 	for _, peer := range self.activePeers {
 		peer.Send(msg)
 	}
+	fmt.Printf("broadcast complete\n")
 }

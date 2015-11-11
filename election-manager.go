@@ -94,7 +94,7 @@ func (self *ElectionManager) GetContender() (*Vote, error) {
 
 func (self *ElectionManager) ProcessVote(from string, vote *Vote) {
 
-	fmt.Printf("vote for %s from %s", vote.GetPeerId(), from)
+	fmt.Printf("vote for %s from %s\n", vote.GetPeerId(), from)
 
 	prevCount := len(self.votes)
 	isFirst := prevCount == 0
