@@ -44,7 +44,8 @@ func NewManager(_myId string, _members []string) *Manager {
 		},
 		fsm.Callbacks{
 			"electing": func(e *fsm.Event) { self.onElecting() },
-			"elected":  func(e *fsm.Event) { self.onElected(e.Args[0].(string), e.Args[1].(int64)) },
+			"enter_elected":  func(e *fsm.Event) { self.onElected(e.Args[0].(string), e.Args[1].(int64)) },
+			"leavw_elected":  func(e *fsm.Event) { self.view++ },
 		},
 	)
 
@@ -121,7 +122,7 @@ func (self *Manager) ProcessVote(from, peerId string, viewId int64) error {
 
 	fmt.Printf("vote for %s from %s\n", peerId, from)
 
-	if viewId <= self.view {
+	if viewId < self.view || (self.state.Current() == "elected" && viewId == self.view) {
 		return errors.New("ignoring stale vote")
 	}
 
