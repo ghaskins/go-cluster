@@ -15,6 +15,7 @@ type ElectionManager struct {
 	votes     Votes
 	first     *Vote
 	leader    string
+	view      int64
 	threshold int
 	C         chan bool
 }
@@ -34,10 +35,11 @@ func NewElectionManager(_myId string, _members []string) *ElectionManager {
 			{Name: "quorum", Src: []string{"idle", "resolved"}, Dst: "electing"},
 			{Name: "complete", Src: []string{"electing"}, Dst: "elected"},
 			{Name: "leader-lost", Src: []string{"elected"}, Dst: "idle"},
+			{Name: "next-view", Src: []string{"electing", "elected"}, Dst: "idle"},
 		},
 		fsm.Callbacks{
 			"electing": func(e *fsm.Event) { self.onElecting() },
-			"elected":  func(e *fsm.Event) { self.onElected(e.Args[0].(string)) },
+			"elected":  func(e *fsm.Event) { self.onElected(e.Args[0].(string), e.Args[1].(int64)) },
 		},
 	)
 
@@ -54,6 +56,10 @@ func (self *ElectionManager) Current() (string, error) {
 		return "", errors.New("leader unknown")
 	}
 
+}
+
+func (self *ElectionManager) View() int64 {
+	return self.view
 }
 
 func (self *ElectionManager) Invalidate(member string) {
@@ -132,7 +138,7 @@ func (self *ElectionManager) ProcessVote(from string, vote *Vote) {
 		result++
 		results[peerId] = result
 		if result >= self.threshold {
-			self.state.Event("complete", peerId)
+			self.state.Event("complete", peerId, vote.GetViewId())
 			continue
 		}
 	}
@@ -143,10 +149,20 @@ func (self *ElectionManager) onElecting() {
 	self.C <- false
 }
 
-func (self *ElectionManager) onElected(leader string) {
+func (self *ElectionManager) onElected(leader string, view int64) {
 	fmt.Printf("EM: Election Complete, new leader = %s\n", leader)
 	self.leader = leader
+	self.resetView(view)
+	self.C <- true // notify our observers
+}
+
+func (self *ElectionManager) resetView(view int64) {
+	self.view = view
 	self.votes = make(Votes) // clear any outstanding votes
 	self.first = nil
-	self.C <- true // notify our observers
+}
+
+func (self *ElectionManager) NextView() {
+	self.resetView(self.view + 1)
+	self.state.Event("next-view")
 }
