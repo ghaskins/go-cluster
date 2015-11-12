@@ -14,7 +14,7 @@ func TestElection(t *testing.T) {
 	assert.NotNil(t, err)
 
 	viewId := em.View()
-	assert.Equal(t, viewId, 0)
+	assert.Equal(t, viewId, int64(0))
 
 	_, err = em.GetContender()
 	assert.NotNil(t, err)
@@ -36,5 +36,5 @@ func TestElection(t *testing.T) {
 	assert.Equal(t, leader, "B")
 
 	viewId = em.View()
-	assert.Equal(t, viewId, 1)
+	assert.Equal(t, viewId, int64(1))
 }

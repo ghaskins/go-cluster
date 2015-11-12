@@ -146,6 +146,7 @@ func (self *ElectionManager) ProcessVote(from string, vote *Vote) error {
 		result, ok := results[peerId]
 		if !ok {
 			result = &Result{votes: 1}
+			results[peerId] = result
 		} else {
 			result.votes++
 		}
