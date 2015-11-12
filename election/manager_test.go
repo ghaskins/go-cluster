@@ -1,7 +1,6 @@
 package election
 
 import (
-	"github.com/ghaskins/go-cluster/pb"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -17,20 +16,17 @@ func TestElection(t *testing.T) {
 	viewId := em.View()
 	assert.Equal(t, viewId, int64(0))
 
-	_, err = em.GetContender()
+	_, _, err = em.GetContender()
 	assert.NotNil(t, err)
 
-	viewId = int64(1)
-	peerId := "B"
-	vote := &pb.Vote{ViewId: &viewId, PeerId: &peerId}
-	em.ProcessVote("A", vote)
+	em.ProcessVote("A", "B", 1)
 
-	contender, err := em.GetContender()
+	contender, _, err := em.GetContender()
 	assert.Nil(t, err)
-	assert.Equal(t, contender.GetPeerId(), "B")
+	assert.Equal(t, contender, "B")
 
-	em.ProcessVote("B", vote)
-	em.ProcessVote("C", vote)
+	em.ProcessVote("B", "B", 1)
+	em.ProcessVote("C", "B", 1)
 
 	leader, err := em.Current()
 	assert.Nil(t, err)
@@ -40,6 +36,6 @@ func TestElection(t *testing.T) {
 	assert.Equal(t, viewId, int64(1))
 
 	// This should be rejected because the view is stale
-	err = em.ProcessVote("D", vote)
+	err = em.ProcessVote("D", "B", 1)
 	assert.NotNil(t, err)
 }

@@ -125,9 +125,13 @@ func (self *Controller) Run() {
 					peer.Send(msg)
 				}
 			default:
-				contender, err := self.electionManager.GetContender()
+				contender, viewId, err := self.electionManager.GetContender()
 				if err == nil {
-					peer.Send(contender)
+					msg := &pb.Vote{
+						ViewId: &viewId,
+						PeerId: &contender,
+					}
+					peer.Send(msg)
 				}
 			}
 
@@ -141,7 +145,7 @@ func (self *Controller) Run() {
 				self.state.Event("heartbeat", _msg.From.Id(), msg.GetViewId())
 			case *pb.Vote:
 				msg := _msg.Payload.(*pb.Vote)
-				err := self.electionManager.ProcessVote(_msg.From.Id(), msg)
+				err := self.electionManager.ProcessVote(_msg.From.Id(), msg.GetPeerId(), msg.GetViewId())
 				if err != nil {
 					fmt.Printf("%s\n", err.Error())
 				}
@@ -217,21 +221,25 @@ func printSeparator() {
 	fmt.Println("---------------------------------------------------")
 }
 
-func (self *Controller) castBallot(vote *pb.Vote) {
-	fmt.Printf("broadcasting vote for %s in view %d\n", vote.GetPeerId(), vote.GetViewId())
-	err := self.electionManager.ProcessVote(self.myId, vote)
+func (self *Controller) castBallot(peerId string, viewId int64) {
+	fmt.Printf("broadcasting vote for %s in view %d\n", peerId, viewId)
+	err := self.electionManager.ProcessVote(self.myId, peerId, viewId)
 	if err != nil {
 		panic(err)
 	}
-	self.broadcast(vote)
+
+	msg := &pb.Vote{
+		ViewId: &viewId,
+		PeerId: &peerId,
+	}
+	self.broadcast(msg)
 }
 
 func (self *Controller) castSelfBallot() {
 	// Vote for ourselves if there isn't a current contender
 	viewId := self.electionManager.View()
-	vote := &pb.Vote{ViewId: &viewId, PeerId: &self.myId}
 
-	self.castBallot(vote)
+	self.castBallot(self.myId, viewId)
 }
 
 func (self *Controller) onConvening() {
@@ -270,12 +278,12 @@ func (self *Controller) onTimeout() {
 func (self *Controller) onElecting() {
 	fmt.Printf("onElecting\n")
 
-	vote, err := self.electionManager.GetContender()
+	contender, view, err := self.electionManager.GetContender()
 	if err != nil {
 		// Vote for ourselves if there isn't a current contender
 		self.castSelfBallot()
 	} else {
-		self.castBallot(vote)
+		self.castBallot(contender, view)
 	}
 
 	self.rearmTimeout()

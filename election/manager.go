@@ -3,19 +3,23 @@ package election
 import (
 	"errors"
 	"fmt"
-	"github.com/ghaskins/go-cluster/pb"
 	"github.com/ghaskins/go-cluster/util"
 	"github.com/looplab/fsm"
 )
 
-type Votes map[string]*pb.Vote
+type Vote struct {
+	viewId int64
+	peerId string
+}
+
+type Votes map[string]Vote
 
 type Manager struct {
 	state     *fsm.FSM
 	myId      string
 	members   []string
 	votes     Votes
-	first     *pb.Vote
+	first     *Vote
 	leader    string
 	view      int64
 	threshold int
@@ -74,9 +78,9 @@ func (self *Manager) VoteCount() int {
 	return len(self.votes)
 }
 
-func (self *Manager) GetContender() (*pb.Vote, error) {
+func (self *Manager) GetContender() (string, int64, error) {
 	if len(self.votes) == 0 {
-		return nil, errors.New("no candidates present")
+		return "", 0, errors.New("no candidates present")
 	}
 
 	results := make(map[string]int)
@@ -85,7 +89,7 @@ func (self *Manager) GetContender() (*pb.Vote, error) {
 
 	// Accumulate all the votes by peer, and make note of the largest
 	for _, vote := range self.votes {
-		peerId := vote.GetPeerId()
+		peerId := vote.peerId
 		result := results[peerId]
 		result++
 		results[peerId] = result
@@ -98,31 +102,33 @@ func (self *Manager) GetContender() (*pb.Vote, error) {
 	if max == 1 {
 		// If we don't have any one peer with more than one vote, the first vote received
 		// has the most weight
-		return self.first, nil
+		return self.first.peerId, self.first.viewId, nil
 	} else {
 		// Now go find the first entry with the same max
 		for peerId, votes := range results {
 			if votes == max {
-				return self.votes[peerId], nil
+				vote := self.votes[peerId]
+				return vote.peerId, vote.viewId, nil
 			}
 		}
 	}
 
-	return nil, errors.New("no candidates computed")
+	return "", 0, errors.New("no candidates computed")
 
 }
 
-func (self *Manager) ProcessVote(from string, vote *pb.Vote) error {
+func (self *Manager) ProcessVote(from, peerId string, viewId int64) error {
 
-	fmt.Printf("vote for %s from %s\n", vote.GetPeerId(), from)
+	fmt.Printf("vote for %s from %s\n", peerId, from)
 
-	if vote.GetViewId() < self.view {
+	if viewId < self.view {
 		return errors.New("ignoring stale vote")
 	}
 
 	prevCount := len(self.votes)
 
-	self.votes[from] = vote
+	vote := &Vote{viewId: viewId, peerId: peerId}
+	self.votes[from] = *vote
 	if prevCount == 0 {
 		self.first = vote // This gives extra weight to the first received vote
 	}
@@ -143,8 +149,8 @@ func (self *Manager) ProcessVote(from string, vote *pb.Vote) error {
 	// We will choose the first entry with enough accumulated votes to exceed quorum.  There should
 	// only be one
 	for _, vote := range self.votes {
-		peerId := vote.GetPeerId()
-		viewId := vote.GetViewId()
+		peerId := vote.peerId
+		viewId := vote.viewId
 		result, ok := results[peerId]
 		if !ok {
 			result = &Result{votes: 1}
