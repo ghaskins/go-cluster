@@ -237,6 +237,10 @@ func (self *Controller) onElecting() {
 	self.broadcast(vote)
 }
 
+func printSeparator() {
+	fmt.Println("---------------------------------------------------")
+}
+
 func (self *Controller) onFollowing() {
 	self.rearmTimeout()
 	leader, err := self.electionManager.Current()
@@ -244,11 +248,15 @@ func (self *Controller) onFollowing() {
 		panic(err)
 	}
 
-	fmt.Printf("following %s\n", leader)
+	printSeparator()
+	fmt.Printf("FOLLOWING %s\n", leader)
+	printSeparator()
 }
 
 func (self *Controller) onLeading() {
-	fmt.Printf("we are the leader\n")
+	printSeparator()
+	fmt.Printf("LEADING\n")
+	printSeparator()
 
 	self.pulse = time.NewTicker(time.Millisecond * time.Duration(self.minTmo/2))
 }
