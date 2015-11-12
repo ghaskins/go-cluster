@@ -35,7 +35,6 @@ func NewElectionManager(_myId string, _members []string) *ElectionManager {
 			{Name: "quorum", Src: []string{"idle", "resolved"}, Dst: "electing"},
 			{Name: "complete", Src: []string{"electing"}, Dst: "elected"},
 			{Name: "leader-lost", Src: []string{"elected"}, Dst: "idle"},
-			{Name: "next-view", Src: []string{"electing", "elected"}, Dst: "idle"},
 		},
 		fsm.Callbacks{
 			"electing": func(e *fsm.Event) { self.onElecting() },
@@ -111,9 +110,13 @@ func (self *ElectionManager) GetContender() (*Vote, error) {
 
 }
 
-func (self *ElectionManager) ProcessVote(from string, vote *Vote) {
+func (self *ElectionManager) ProcessVote(from string, vote *Vote) error {
 
 	fmt.Printf("vote for %s from %s\n", vote.GetPeerId(), from)
+
+	if vote.GetViewId() < self.view {
+		return errors.New("ignoring stale vote")
+	}
 
 	prevCount := len(self.votes)
 
@@ -128,20 +131,36 @@ func (self *ElectionManager) ProcessVote(from string, vote *Vote) {
 		self.state.Event("quorum")
 	}
 
-	results := make(map[string]int)
+	type Result struct {
+		votes int64
+		maxViewId int64
+	}
+
+	results := make(map[string]*Result)
 
 	// We will choose the first entry with enough accumulated votes to exceed quorum.  There should
 	// only be one
 	for _, vote := range self.votes {
 		peerId := vote.GetPeerId()
-		result := results[peerId]
-		result++
-		results[peerId] = result
-		if result >= self.threshold {
-			self.state.Event("complete", peerId, vote.GetViewId())
+		viewId := vote.GetViewId()
+		result,ok := results[peerId]
+		if !ok {
+			result = &Result{votes: 1}
+		} else {
+			result.votes++
+		}
+
+		if viewId > result.maxViewId {
+			result.maxViewId = viewId
+		}
+
+		if result.votes >= int64(self.threshold) {
+			self.state.Event("complete", peerId, result.maxViewId)
 			continue
 		}
 	}
+
+	return nil
 }
 
 func (self *ElectionManager) onElecting() {
@@ -152,17 +171,12 @@ func (self *ElectionManager) onElecting() {
 func (self *ElectionManager) onElected(leader string, view int64) {
 	fmt.Printf("EM: Election Complete, new leader = %s\n", leader)
 	self.leader = leader
-	self.resetView(view)
-	self.C <- true // notify our observers
-}
-
-func (self *ElectionManager) resetView(view int64) {
 	self.view = view
 	self.votes = make(Votes) // clear any outstanding votes
 	self.first = nil
+	self.C <- true // notify our observers
 }
 
 func (self *ElectionManager) NextView() {
-	self.resetView(self.view + 1)
-	self.state.Event("next-view")
+	self.view++
 }
