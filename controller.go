@@ -193,7 +193,7 @@ func (self *Controller) Run() {
 		//---------------------------------------------------------
 		case peerId := <-disconnectionEvents:
 			fmt.Printf("lost connection from %s\n", peerId)
-			if len(self.activePeers) < self.quorumThreshold {
+			if len(self.activePeers) <= self.quorumThreshold {
 				self.state.Event("quorum-lost")
 			}
 			delete(self.activePeers, peerId)
