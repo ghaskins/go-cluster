@@ -202,12 +202,14 @@ func (self *Controller) onTimeout() {
 
 	fmt.Printf("onTimeout\n")
 
-	if self.electionManager.VoteCount() == 0 {
+	vote, err := self.electionManager.GetContender()
+	if err != nil {
+		// Vote for ourselves if there isn't a current contender
 		nextViewId := self.viewId + 1
-		vote := &Vote{ViewId: &nextViewId, PeerId: &self.myId}
-
-		self.electionManager.ProcessVote(self.myId, vote)
+		vote = &Vote{ViewId: &nextViewId, PeerId: &self.myId}
 	}
+
+	self.electionManager.ProcessVote(self.myId, vote)
 
 	self.rearmTimer()
 }

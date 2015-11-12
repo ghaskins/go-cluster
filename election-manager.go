@@ -13,6 +13,7 @@ type ElectionManager struct {
 	myId      string
 	members   []string
 	votes     Votes
+	first     *Vote
 	leader    string
 	threshold int
 	C         chan bool
@@ -83,10 +84,16 @@ func (self *ElectionManager) GetContender() (*Vote, error) {
 		}
 	}
 
-	// Now go find the first entry with the same max
-	for peerId, votes := range results {
-		if votes == max {
-			return self.votes[peerId], nil
+	if max == 1 {
+		// If we don't have any one peer with more than one vote, the first vote received
+		// has the most weight
+		return self.first, nil
+	} else {
+		// Now go find the first entry with the same max
+		for peerId, votes := range results {
+			if votes == max {
+				return self.votes[peerId], nil
+			}
 		}
 	}
 
@@ -99,11 +106,10 @@ func (self *ElectionManager) ProcessVote(from string, vote *Vote) {
 	fmt.Printf("vote for %s from %s\n", vote.GetPeerId(), from)
 
 	prevCount := len(self.votes)
-	isFirst := prevCount == 0
 
 	self.votes[from] = vote
-	if isFirst && from != self.myId {
-		self.votes[self.myId] = vote // This gives extra weight to the first received vote
+	if prevCount == 0 {
+		self.first = vote // This gives extra weight to the first received vote
 	}
 
 	currCount := len(self.votes)
@@ -137,5 +143,6 @@ func (self *ElectionManager) onElected(leader string) {
 	fmt.Printf("EM: Election Complete, new leader = %s\n", leader)
 	self.leader = leader
 	self.votes = make(Votes) // clear any outstanding votes
-	self.C <- true           // notify our observers
+	self.first = nil
+	self.C <- true // notify our observers
 }

@@ -29,8 +29,6 @@ func (self *Peer) Id() string {
 
 func (self *Peer) rxLoop() error {
 
-	fmt.Printf("peer %s rxLoop\n", self.conn.Id.Id)
-
 	for {
 		header := &Header{}
 		if err := self.conn.Recv(header); err != nil {
