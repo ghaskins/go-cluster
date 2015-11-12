@@ -121,7 +121,7 @@ func (self *Manager) ProcessVote(from, peerId string, viewId int64) error {
 
 	fmt.Printf("vote for %s from %s\n", peerId, from)
 
-	if viewId < self.view {
+	if viewId <= self.view {
 		return errors.New("ignoring stale vote")
 	}
 
