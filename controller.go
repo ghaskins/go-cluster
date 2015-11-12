@@ -10,21 +10,21 @@ import (
 )
 
 type Controller struct {
-	state            *fsm.FSM
-	connectionEvents chan *Connection
-	peers            IdentityMap
-	myId             string
-	activePeers      map[string]*Peer
-	quorumThreshold  int
-	viewId           int64
-	timer            *time.Timer
-	pulse            *time.Ticker
-	electionManager  *ElectionManager
-	minTmo           int64
-	maxTmo           int64
+	state           *fsm.FSM
+	peers           IdentityMap
+	connMgr         *ConnectionManager
+	myId            string
+	activePeers     map[string]*Peer
+	quorumThreshold int
+	viewId          int64
+	timer           *time.Timer
+	pulse           *time.Ticker
+	electionManager *ElectionManager
+	minTmo          int64
+	maxTmo          int64
 }
 
-func NewController(_id string, _peers IdentityMap) *Controller {
+func NewController(_id string, _peers IdentityMap, _connMgr *ConnectionManager) *Controller {
 
 	var members []string
 
@@ -33,16 +33,16 @@ func NewController(_id string, _peers IdentityMap) *Controller {
 	}
 
 	self := &Controller{
-		connectionEvents: make(chan *Connection, 100),
-		peers:            _peers,
-		myId:             _id,
-		activePeers:      make(map[string]*Peer),
-		quorumThreshold:  ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
-		timer:            time.NewTimer(0),
-		pulse:            time.NewTicker(1),
-		electionManager:  NewElectionManager(_id, members),
-		minTmo:           500,
-		maxTmo:           1000,
+		peers:           _peers,
+		connMgr:         _connMgr,
+		myId:            _id,
+		activePeers:     make(map[string]*Peer),
+		quorumThreshold: ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
+		timer:           time.NewTimer(0),
+		pulse:           time.NewTicker(1),
+		electionManager: NewElectionManager(_id, members),
+		minTmo:          500,
+		maxTmo:          1000,
 	}
 
 	<-self.timer.C // drain the initial event
@@ -75,10 +75,6 @@ func NewController(_id string, _peers IdentityMap) *Controller {
 	return self
 }
 
-func (self *Controller) Connect(conn *Connection) {
-	self.connectionEvents <- conn
-}
-
 func (self *Controller) Run() {
 
 	disconnectionEvents := make(DisconnectChannel, 100)
@@ -91,7 +87,7 @@ func (self *Controller) Run() {
 		//---------------------------------------------------------
 		// new connections
 		//---------------------------------------------------------
-		case conn := <-self.connectionEvents:
+		case conn := <-self.connMgr.C:
 			fmt.Printf("new connection from %s\n", conn.Id.Id)
 
 			if _, ok := self.activePeers[conn.Id.Id]; ok {
@@ -184,6 +180,7 @@ func (self *Controller) Run() {
 			}
 			delete(self.activePeers, peerId)
 			self.electionManager.Invalidate(peerId)
+			self.connMgr.Dial(peerId)
 		}
 	}
 }
