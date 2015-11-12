@@ -33,6 +33,7 @@ func NewElectionManager(_myId string, _members []string) *ElectionManager {
 		fsm.Events{
 			{Name: "quorum", Src: []string{"idle", "resolved"}, Dst: "electing"},
 			{Name: "complete", Src: []string{"electing"}, Dst: "elected"},
+			{Name: "leader-lost", Src: []string{"elected"}, Dst: "idle"},
 		},
 		fsm.Callbacks{
 			"electing": func(e *fsm.Event) { self.onElecting() },
@@ -57,6 +58,9 @@ func (self *ElectionManager) Current() (string, error) {
 
 func (self *ElectionManager) Invalidate(member string) {
 	delete(self.votes, member)
+	if self.state.Current() == "elected" && member == self.leader {
+		self.state.Event("leader-lost")
+	}
 }
 
 func (self *ElectionManager) VoteCount() int {

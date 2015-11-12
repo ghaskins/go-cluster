@@ -103,7 +103,6 @@ func main() {
 
 			for {
 				var err error
-				fmt.Println("Attempting to connect to " + peer.Cert.Subject.CommonName)
 				conn, err = Dial(tlsCert, &peer)
 				if err == nil {
 					break
