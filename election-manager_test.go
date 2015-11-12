@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
 func TestElection(t *testing.T) {
 	members := []string{"A", "B", "C", "D", "E"}
@@ -8,50 +11,30 @@ func TestElection(t *testing.T) {
 	em := NewElectionManager(id, members)
 
 	_, err := em.Current()
-	if err == nil {
-		t.Fail()
-	}
+	assert.NotNil(t, err)
 
 	viewId := em.View()
-	if viewId != 0 {
-		t.Fatalf("unexpected viewid %d", viewId)
-	}
+	assert.Equal(t, viewId, 0)
 
-	_,err = em.GetContender()
-	if err == nil {
-		t.Fail()
-	}
+	_, err = em.GetContender()
+	assert.NotNil(t, err)
 
-	viewId = int64(1);
+	viewId = int64(1)
 	peerId := "B"
 	vote := &Vote{ViewId: &viewId, PeerId: &peerId}
 	em.ProcessVote("A", vote)
 
-	contender,err := em.GetContender()
-	if err != nil {
-		t.Fail()
-	}
-
-	if contender.GetPeerId() != "B" {
-		t.Fatalf("unexpected contender %s", contender)
-	}
+	contender, err := em.GetContender()
+	assert.Nil(t, err)
+	assert.Equal(t, contender.GetPeerId(), "B")
 
 	em.ProcessVote("B", vote)
 	em.ProcessVote("C", vote)
 
 	leader, err := em.Current()
-	if err != nil {
-		t.Fail()
-	}
-
-	if leader != "B" {
-		t.Fatalf("unexpected leader %s", leader)
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, leader, "B")
 
 	viewId = em.View()
-	if viewId != 1 {
-		t.Fatalf("unexpected viewid %d", viewId)
-	}
-
-
+	assert.Equal(t, viewId, 1)
 }

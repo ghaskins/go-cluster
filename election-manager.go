@@ -132,7 +132,7 @@ func (self *ElectionManager) ProcessVote(from string, vote *Vote) error {
 	}
 
 	type Result struct {
-		votes int64
+		votes     int64
 		maxViewId int64
 	}
 
@@ -143,7 +143,7 @@ func (self *ElectionManager) ProcessVote(from string, vote *Vote) error {
 	for _, vote := range self.votes {
 		peerId := vote.GetPeerId()
 		viewId := vote.GetViewId()
-		result,ok := results[peerId]
+		result, ok := results[peerId]
 		if !ok {
 			result = &Result{votes: 1}
 		} else {
