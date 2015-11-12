@@ -3,7 +3,7 @@
 // DO NOT EDIT!
 
 /*
-Package main is a generated protocol buffer package.
+Package pb is a generated protocol buffer package.
 
 It is generated from these files:
 	cluster.proto
@@ -14,7 +14,7 @@ It has these top-level messages:
 	Heartbeat
 	Vote
 */
-package main
+package pb
 
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
@@ -91,7 +91,7 @@ func (m *Negotiate) GetOptions() []string {
 }
 
 type Header struct {
-	Type             *Type  `protobuf:"varint,1,opt,name=type,enum=main.Type" json:"type,omitempty"`
+	Type             *Type  `protobuf:"varint,1,opt,name=type,enum=pb.Type" json:"type,omitempty"`
 	XXX_unrecognized []byte `json:"-"`
 }
 
@@ -147,9 +147,9 @@ func (m *Vote) GetPeerId() string {
 }
 
 func init() {
-	proto.RegisterType((*Negotiate)(nil), "main.Negotiate")
-	proto.RegisterType((*Header)(nil), "main.Header")
-	proto.RegisterType((*Heartbeat)(nil), "main.Heartbeat")
-	proto.RegisterType((*Vote)(nil), "main.Vote")
-	proto.RegisterEnum("main.Type", Type_name, Type_value)
+	proto.RegisterType((*Negotiate)(nil), "pb.Negotiate")
+	proto.RegisterType((*Header)(nil), "pb.Header")
+	proto.RegisterType((*Heartbeat)(nil), "pb.Heartbeat")
+	proto.RegisterType((*Vote)(nil), "pb.Vote")
+	proto.RegisterEnum("pb.Type", Type_name, Type_value)
 }

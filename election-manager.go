@@ -3,17 +3,18 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/ghaskins/go-cluster/pb"
 	"github.com/looplab/fsm"
 )
 
-type Votes map[string]*Vote
+type Votes map[string]*pb.Vote
 
 type ElectionManager struct {
 	state     *fsm.FSM
 	myId      string
 	members   []string
 	votes     Votes
-	first     *Vote
+	first     *pb.Vote
 	leader    string
 	view      int64
 	threshold int
@@ -72,7 +73,7 @@ func (self *ElectionManager) VoteCount() int {
 	return len(self.votes)
 }
 
-func (self *ElectionManager) GetContender() (*Vote, error) {
+func (self *ElectionManager) GetContender() (*pb.Vote, error) {
 	if len(self.votes) == 0 {
 		return nil, errors.New("no candidates present")
 	}
@@ -110,7 +111,7 @@ func (self *ElectionManager) GetContender() (*Vote, error) {
 
 }
 
-func (self *ElectionManager) ProcessVote(from string, vote *Vote) error {
+func (self *ElectionManager) ProcessVote(from string, vote *pb.Vote) error {
 
 	fmt.Printf("vote for %s from %s\n", vote.GetPeerId(), from)
 

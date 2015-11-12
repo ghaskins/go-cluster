@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/ghaskins/go-cluster/pb"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -21,7 +22,7 @@ func TestElection(t *testing.T) {
 
 	viewId = int64(1)
 	peerId := "B"
-	vote := &Vote{ViewId: &viewId, PeerId: &peerId}
+	vote := &pb.Vote{ViewId: &viewId, PeerId: &peerId}
 	em.ProcessVote("A", vote)
 
 	contender, err := em.GetContender()

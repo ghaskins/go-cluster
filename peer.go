@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/ghaskins/go-cluster/pb"
 	"github.com/golang/protobuf/proto"
 	"io"
 )
@@ -30,7 +31,7 @@ func (self *Peer) Id() string {
 func (self *Peer) rxLoop() error {
 
 	for {
-		header := &Header{}
+		header := &pb.Header{}
 		if err := self.conn.Recv(header); err != nil {
 			switch {
 			case err == io.EOF:
@@ -44,10 +45,10 @@ func (self *Peer) rxLoop() error {
 		var payload proto.Message
 
 		switch header.GetType() {
-		case Type_HEARTBEAT:
-			payload = new(Heartbeat)
-		case Type_VOTE:
-			payload = new(Vote)
+		case pb.Type_HEARTBEAT:
+			payload = new(pb.Heartbeat)
+		case pb.Type_VOTE:
+			payload = new(pb.Vote)
 		default:
 			continue
 		}
@@ -80,16 +81,16 @@ func (self *Peer) runTx() {
 		select {
 		case msg := <-self.txChannel:
 
-			var t Type
+			var t pb.Type
 
 			switch msg.(type) {
-			case *Heartbeat:
-				t = Type_HEARTBEAT
-			case *Vote:
-				t = Type_VOTE
+			case *pb.Heartbeat:
+				t = pb.Type_HEARTBEAT
+			case *pb.Vote:
+				t = pb.Type_VOTE
 			}
 
-			header := &Header{Type: &t}
+			header := &pb.Header{Type: &t}
 			self.conn.Send(header)
 			self.conn.Send(msg)
 		case _ = <-self.txStop:

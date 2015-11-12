@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/ghaskins/go-cluster/pb"
 	"github.com/golang/protobuf/proto"
 	"github.com/looplab/fsm"
 	"math/big"
@@ -115,7 +116,7 @@ func (self *Controller) Run() {
 				leader, err := self.electionManager.Current()
 				viewId := self.electionManager.View()
 				if err == nil {
-					msg := &Vote{
+					msg := &pb.Vote{
 						ViewId: &viewId,
 						PeerId: &leader,
 					}
@@ -133,11 +134,11 @@ func (self *Controller) Run() {
 		//---------------------------------------------------------
 		case _msg := <-messageEvents:
 			switch _msg.Payload.(type) {
-			case *Heartbeat:
-				msg := _msg.Payload.(*Heartbeat)
+			case *pb.Heartbeat:
+				msg := _msg.Payload.(*pb.Heartbeat)
 				self.state.Event("heartbeat", _msg.From.Id(), msg.GetViewId())
-			case *Vote:
-				msg := _msg.Payload.(*Vote)
+			case *pb.Vote:
+				msg := _msg.Payload.(*pb.Vote)
 				err := self.electionManager.ProcessVote(_msg.From.Id(), msg)
 				if err != nil {
 					fmt.Printf("%s\n", err.Error())
@@ -178,7 +179,7 @@ func (self *Controller) Run() {
 		case _ = <-self.pulse.C:
 			if self.state.Current() == "leading" {
 				viewId := self.electionManager.View()
-				self.broadcast(&Heartbeat{ViewId: &viewId})
+				self.broadcast(&pb.Heartbeat{ViewId: &viewId})
 			}
 
 		//---------------------------------------------------------
@@ -214,7 +215,7 @@ func printSeparator() {
 	fmt.Println("---------------------------------------------------")
 }
 
-func (self *Controller) castBallot(vote *Vote) {
+func (self *Controller) castBallot(vote *pb.Vote) {
 	fmt.Printf("broadcasting vote for %s in view %d\n", vote.GetPeerId(), vote.GetViewId())
 	err := self.electionManager.ProcessVote(self.myId, vote)
 	if err != nil {
@@ -226,7 +227,7 @@ func (self *Controller) castBallot(vote *Vote) {
 func (self *Controller) castSelfBallot() {
 	// Vote for ourselves if there isn't a current contender
 	viewId := self.electionManager.View()
-	vote := &Vote{ViewId: &viewId, PeerId: &self.myId}
+	vote := &pb.Vote{ViewId: &viewId, PeerId: &self.myId}
 
 	self.castBallot(vote)
 }
