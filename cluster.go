@@ -26,20 +26,18 @@ func main() {
 		log.Fatalf("Invalid index")
 	}
 
-	allMembers := IdentityMap{}
-	allPeers := IdentityMap{}
-
 	self := NewIdentity(certs[*id])
 
-	for i, cert := range certs {
+	members := IdentityMap{}
+	peers := IdentityMap{}
+
+	for _, cert := range certs {
 		member := NewIdentity(cert)
-		allMembers[member.Id] = member
-		if i != *id {
-			allPeers[member.Id] = member
-		}
+		members[member.Id] = member
+		peers[member.Id] = member
 	}
 
-	fmt.Printf("Using %s - %s with peers:\n", self.Cert.Subject.CommonName, self.Id)
+	delete(peers, self.Id) // peers are all members _except_ ourselves
 
 	var tlsCert *tls.Certificate
 	tlsCert, err = CreateTlsIdentity(self.Cert, *privateKey)
@@ -47,8 +45,8 @@ func main() {
 		panic(err)
 	}
 
-	connMgr := NewConnectionManager(self, tlsCert, allPeers)
-	controller := NewController(self.Id, allMembers, connMgr)
+	connMgr := NewConnectionManager(self, tlsCert, peers)
+	controller := NewController(self.Id, members, connMgr)
 
 	controller.Run()
 }

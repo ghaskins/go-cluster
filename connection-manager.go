@@ -18,13 +18,15 @@ type ConnectionManager struct {
 
 func NewConnectionManager(_id *Identity, _cert *tls.Certificate, _peers IdentityMap) *ConnectionManager {
 	self := &ConnectionManager{
-		id:    _id,
-		cert:  _cert,
-		peers: _peers,
+		id:      _id,
+		cert:    _cert,
+		peers:   _peers,
 		servers: IdentityMap{},
 		clients: IdentityMap{},
-		C:     make(chan *Connection, 100),
+		C:       make(chan *Connection, 100),
 	}
+
+	fmt.Printf("Using %s - %s with peers:\n", self.id.Cert.Subject.CommonName, self.id.Id)
 
 	for _, peer := range _peers {
 		fmt.Printf("\t%s - %s (", peer.Cert.Subject.CommonName, peer.Id)
