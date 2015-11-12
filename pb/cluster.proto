@@ -1,4 +1,4 @@
-package main;
+package pb;
 
 enum Type {
     HEARTBEAT        = 1;

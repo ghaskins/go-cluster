@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ghaskins/go-cluster/pb"
 	"github.com/golang/protobuf/proto"
 	"net"
 	"strings"
@@ -87,14 +88,14 @@ func newConfig(self *tls.Certificate) *tls.Config {
 	return config
 }
 
-func newNegotiate() *Negotiate {
-	return &Negotiate{
+func newNegotiate() *pb.Negotiate {
+	return &pb.Negotiate{
 		Magic:   proto.String("cluster"),
 		Version: proto.Int(1),
 	}
 }
 
-func verifyProtocol(ours, theirs *Negotiate) error {
+func verifyProtocol(ours, theirs *pb.Negotiate) error {
 	if strings.Compare(*ours.Magic, *theirs.Magic) != 0 || *ours.Version != *theirs.Version {
 		return errors.New(fmt.Sprintf("incompatible wire protocol (ours: %v, theirs: %v)", ours, theirs))
 	}
@@ -121,7 +122,7 @@ func Dial(self *tls.Certificate, peer *Identity) (conn *Connection, err error) {
 	// Negotiation protocol: send a Negotiate packet to the server, and wait for
 	// a response.  Then ensure baseline compatibility
 	ours := newNegotiate()
-	theirs := &Negotiate{}
+	theirs := &pb.Negotiate{}
 
 	conn.Send(ours)
 	err = conn.Recv(theirs)
@@ -154,7 +155,7 @@ func Accept(listener net.Listener) (*Connection, error) {
 
 	// Negotiation protocol: wait for a negotiate message, compare, and reply
 	ours := newNegotiate()
-	theirs := &Negotiate{}
+	theirs := &pb.Negotiate{}
 
 	err = conn.Recv(theirs)
 	if err != nil {

@@ -3,6 +3,9 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/ghaskins/go-cluster/election"
+	"github.com/ghaskins/go-cluster/pb"
+	"github.com/ghaskins/go-cluster/util"
 	"github.com/golang/protobuf/proto"
 	"github.com/looplab/fsm"
 	"math/big"
@@ -18,7 +21,7 @@ type Controller struct {
 	quorumThreshold int
 	timer           *time.Timer
 	pulse           *time.Ticker
-	electionManager *ElectionManager
+	electionManager *election.Manager
 	minTmo          int64
 	maxTmo          int64
 }
@@ -36,10 +39,10 @@ func NewController(_id string, _peers IdentityMap, _connMgr *ConnectionManager) 
 		connMgr:         _connMgr,
 		myId:            _id,
 		activePeers:     make(map[string]*Peer),
-		quorumThreshold: ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
+		quorumThreshold: util.ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
 		timer:           time.NewTimer(0),
 		pulse:           time.NewTicker(1),
-		electionManager: NewElectionManager(_id, members),
+		electionManager: election.NewManager(_id, members),
 		minTmo:          500,
 		maxTmo:          1000,
 	}
@@ -52,25 +55,23 @@ func NewController(_id string, _peers IdentityMap, _connMgr *ConnectionManager) 
 		"convening",
 		fsm.Events{
 			{Name: "quorum", Src: []string{"convening"}, Dst: "initializing"},
-			{Name: "quorum-lost", Dst: "convening"},
+			{Name: "quorum-lost", Src: []string{"initializing", "electing", "electing-restart", "following", "leading"}, Dst: "convening"},
 			{Name: "elected-self", Src: []string{"initializing", "electing"}, Dst: "leading"},
 			{Name: "elected-other", Src: []string{"initializing", "electing"}, Dst: "following"},
-			{Name: "timeout", Src: []string{"initializing", "following"}, Dst: "electing"},
-			{Name: "timeout", Src: []string{"electing"}, Dst: "electing-restart"},
-			{Name: "election-restarted", Src: []string{"electing-restart"}, Dst: "electing"},
+			{Name: "timeout", Src: []string{"initializing", "following", "electing"}, Dst: "electing"},
 			{Name: "election", Src: []string{"following", "leading"}, Dst: "electing"},
 			{Name: "heartbeat", Src: []string{"following"}, Dst: "following"},
 		},
 		fsm.Callbacks{
+			"convening":          func(e *fsm.Event) { self.onConvening() },
 			"enter_initializing": func(e *fsm.Event) { self.onInitializing() },
 			"leave_initializing": func(e *fsm.Event) { self.timer.Stop() },
-			"enter_following":    func(e *fsm.Event) { self.onFollowing() },
-			"leave_following":    func(e *fsm.Event) { self.timer.Stop() },
+			"enter_following":    func(e *fsm.Event) { self.onEnterFollowing() },
+			"leave_following":    func(e *fsm.Event) { self.onLeaveFollowing() },
 			"enter_electing":     func(e *fsm.Event) { self.onElecting() },
 			"leave_electing":     func(e *fsm.Event) { self.timer.Stop() },
-			"electing-restart":   func(e *fsm.Event) { self.onElectingRestart() },
-			"enter_leading":      func(e *fsm.Event) { self.onLeading() },
-			"leave_leading":      func(e *fsm.Event) { self.pulse.Stop() },
+			"enter_leading":      func(e *fsm.Event) { self.onEnterLeading() },
+			"leave_leading":      func(e *fsm.Event) { self.onLeaveLeading() },
 			"heartbeat":          func(e *fsm.Event) { self.onHeartBeat(e.Args[0].(string), e.Args[1].(int64)) },
 			"before_timeout":     func(e *fsm.Event) { self.onTimeout() },
 		},
@@ -105,7 +106,7 @@ func (self *Controller) Run() {
 
 			self.state.Event("connection", conn.Id.Id)
 
-			if len(self.activePeers) == self.quorumThreshold {
+			if len(self.activePeers) >= self.quorumThreshold {
 				self.state.Event("quorum")
 			}
 
@@ -117,16 +118,20 @@ func (self *Controller) Run() {
 				leader, err := self.electionManager.Current()
 				viewId := self.electionManager.View()
 				if err == nil {
-					msg := &Vote{
+					msg := &pb.Vote{
 						ViewId: &viewId,
 						PeerId: &leader,
 					}
 					peer.Send(msg)
 				}
-			case "electing":
-				contender, err := self.electionManager.GetContender()
+			default:
+				contender, viewId, err := self.electionManager.GetContender()
 				if err == nil {
-					peer.Send(contender)
+					msg := &pb.Vote{
+						ViewId: &viewId,
+						PeerId: &contender,
+					}
+					peer.Send(msg)
 				}
 			}
 
@@ -135,12 +140,15 @@ func (self *Controller) Run() {
 		//---------------------------------------------------------
 		case _msg := <-messageEvents:
 			switch _msg.Payload.(type) {
-			case *Heartbeat:
-				msg := _msg.Payload.(*Heartbeat)
+			case *pb.Heartbeat:
+				msg := _msg.Payload.(*pb.Heartbeat)
 				self.state.Event("heartbeat", _msg.From.Id(), msg.GetViewId())
-			case *Vote:
-				msg := _msg.Payload.(*Vote)
-				self.electionManager.ProcessVote(_msg.From.Id(), msg)
+			case *pb.Vote:
+				msg := _msg.Payload.(*pb.Vote)
+				err := self.electionManager.ProcessVote(_msg.From.Id(), msg.GetPeerId(), msg.GetViewId())
+				if err != nil {
+					fmt.Printf("%s\n", err.Error())
+				}
 			}
 
 		//---------------------------------------------------------
@@ -177,7 +185,7 @@ func (self *Controller) Run() {
 		case _ = <-self.pulse.C:
 			if self.state.Current() == "leading" {
 				viewId := self.electionManager.View()
-				self.broadcast(&Heartbeat{ViewId: &viewId})
+				self.broadcast(&pb.Heartbeat{ViewId: &viewId})
 			}
 
 		//---------------------------------------------------------
@@ -185,7 +193,7 @@ func (self *Controller) Run() {
 		//---------------------------------------------------------
 		case peerId := <-disconnectionEvents:
 			fmt.Printf("lost connection from %s\n", peerId)
-			if len(self.activePeers) == self.quorumThreshold {
+			if len(self.activePeers) < self.quorumThreshold {
 				self.state.Event("quorum-lost")
 			}
 			delete(self.activePeers, peerId)
@@ -207,6 +215,35 @@ func (self *Controller) rearmTimeout() {
 func (self *Controller) rearmTimer(tmo int64) {
 	//fmt.Printf("(re)arming timer with %vms\n", tmo)
 	self.timer.Reset(time.Millisecond * time.Duration(tmo))
+}
+
+func printSeparator() {
+	fmt.Println("---------------------------------------------------")
+}
+
+func (self *Controller) castBallot(peerId string, viewId int64) {
+	fmt.Printf("broadcasting vote for %s in view %d\n", peerId, viewId)
+	err := self.electionManager.ProcessVote(self.myId, peerId, viewId)
+	if err != nil {
+		panic(err)
+	}
+
+	msg := &pb.Vote{
+		ViewId: &viewId,
+		PeerId: &peerId,
+	}
+	self.broadcast(msg)
+}
+
+func (self *Controller) castSelfBallot() {
+	// Vote for ourselves if there isn't a current contender
+	viewId := self.electionManager.View()
+
+	self.castBallot(self.myId, viewId)
+}
+
+func (self *Controller) onConvening() {
+	fmt.Printf("onConvening\n")
 }
 
 func (self *Controller) onInitializing() {
@@ -236,33 +273,18 @@ func (self *Controller) onTimeout() {
 func (self *Controller) onElecting() {
 	fmt.Printf("onElecting\n")
 
-	vote, err := self.electionManager.GetContender()
+	contender, view, err := self.electionManager.GetContender()
 	if err != nil {
 		// Vote for ourselves if there isn't a current contender
-		viewId := self.electionManager.View()
-		vote = &Vote{ViewId: &viewId, PeerId: &self.myId}
+		self.castSelfBallot()
+	} else {
+		self.castBallot(contender, view)
 	}
 
-	self.electionManager.ProcessVote(self.myId, vote)
-
-	fmt.Printf("broadcasting vote for %s in view %d\n", vote.GetPeerId(), vote.GetViewId())
-	self.broadcast(vote)
 	self.rearmTimeout()
 }
 
-func (self *Controller) onElectingRestart() {
-	fmt.Printf("onElectingRestart\n")
-
-	self.electionManager.NextView()
-	self.state.Transition()
-	self.state.Event("election-restarted")
-}
-
-func printSeparator() {
-	fmt.Println("---------------------------------------------------")
-}
-
-func (self *Controller) onFollowing() {
+func (self *Controller) onEnterFollowing() {
 	self.rearmTimeout()
 	leader, err := self.electionManager.Current()
 	if err != nil {
@@ -274,12 +296,22 @@ func (self *Controller) onFollowing() {
 	printSeparator()
 }
 
-func (self *Controller) onLeading() {
+func (self *Controller) onLeaveFollowing() {
+	self.electionManager.NextView()
+	self.timer.Stop()
+}
+
+func (self *Controller) onEnterLeading() {
 	printSeparator()
 	fmt.Printf("VIEW %d: LEADING\n", self.electionManager.View())
 	printSeparator()
 
 	self.pulse = time.NewTicker(time.Millisecond * time.Duration(self.minTmo/2))
+}
+
+func (self *Controller) onLeaveLeading() {
+	self.electionManager.NextView()
+	self.pulse.Stop()
 }
 
 func (self *Controller) broadcast(msg proto.Message) {

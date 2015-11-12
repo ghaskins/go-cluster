@@ -1,14 +1,20 @@
-package main
+package election
 
 import (
 	"errors"
 	"fmt"
+	"github.com/ghaskins/go-cluster/util"
 	"github.com/looplab/fsm"
 )
 
-type Votes map[string]*Vote
+type Vote struct {
+	viewId int64
+	peerId string
+}
 
-type ElectionManager struct {
+type Votes map[string]Vote
+
+type Manager struct {
 	state     *fsm.FSM
 	myId      string
 	members   []string
@@ -20,12 +26,12 @@ type ElectionManager struct {
 	C         chan bool
 }
 
-func NewElectionManager(_myId string, _members []string) *ElectionManager {
-	self := &ElectionManager{
+func NewManager(_myId string, _members []string) *Manager {
+	self := &Manager{
 		myId:      _myId,
 		members:   _members,
 		votes:     make(Votes),
-		threshold: ComputeQuorumThreshold(len(_members)),
+		threshold: util.ComputeQuorumThreshold(len(_members)),
 		C:         make(chan bool, 100),
 	}
 
@@ -34,12 +40,12 @@ func NewElectionManager(_myId string, _members []string) *ElectionManager {
 		fsm.Events{
 			{Name: "quorum", Src: []string{"idle", "resolved"}, Dst: "electing"},
 			{Name: "complete", Src: []string{"electing"}, Dst: "elected"},
-			{Name: "leader-lost", Src: []string{"elected"}, Dst: "idle"},
-			{Name: "next-view", Src: []string{"electing", "elected"}, Dst: "idle"},
+			{Name: "next", Src: []string{"elected"}, Dst: "idle"},
 		},
 		fsm.Callbacks{
 			"electing": func(e *fsm.Event) { self.onElecting() },
-			"elected":  func(e *fsm.Event) { self.onElected(e.Args[0].(string), e.Args[1].(int64)) },
+			"enter_elected":  func(e *fsm.Event) { self.onElected(e.Args[0].(string), e.Args[1].(int64)) },
+			"leave_elected":  func(e *fsm.Event) { self.view++ },
 		},
 	)
 
@@ -48,7 +54,7 @@ func NewElectionManager(_myId string, _members []string) *ElectionManager {
 	return self
 }
 
-func (self *ElectionManager) Current() (string, error) {
+func (self *Manager) Current() (string, error) {
 	switch self.state.Current() {
 	case "elected":
 		return self.leader, nil
@@ -58,24 +64,24 @@ func (self *ElectionManager) Current() (string, error) {
 
 }
 
-func (self *ElectionManager) View() int64 {
+func (self *Manager) View() int64 {
 	return self.view
 }
 
-func (self *ElectionManager) Invalidate(member string) {
+func (self *Manager) Invalidate(member string) {
 	delete(self.votes, member)
 	if self.state.Current() == "elected" && member == self.leader {
 		self.state.Event("leader-lost")
 	}
 }
 
-func (self *ElectionManager) VoteCount() int {
+func (self *Manager) VoteCount() int {
 	return len(self.votes)
 }
 
-func (self *ElectionManager) GetContender() (*Vote, error) {
+func (self *Manager) GetContender() (string, int64, error) {
 	if len(self.votes) == 0 {
-		return nil, errors.New("no candidates present")
+		return "", 0, errors.New("no candidates present")
 	}
 
 	results := make(map[string]int)
@@ -84,7 +90,7 @@ func (self *ElectionManager) GetContender() (*Vote, error) {
 
 	// Accumulate all the votes by peer, and make note of the largest
 	for _, vote := range self.votes {
-		peerId := vote.GetPeerId()
+		peerId := vote.peerId
 		result := results[peerId]
 		result++
 		results[peerId] = result
@@ -97,27 +103,33 @@ func (self *ElectionManager) GetContender() (*Vote, error) {
 	if max == 1 {
 		// If we don't have any one peer with more than one vote, the first vote received
 		// has the most weight
-		return self.first, nil
+		return self.first.peerId, self.first.viewId, nil
 	} else {
 		// Now go find the first entry with the same max
 		for peerId, votes := range results {
 			if votes == max {
-				return self.votes[peerId], nil
+				vote := self.votes[peerId]
+				return vote.peerId, vote.viewId, nil
 			}
 		}
 	}
 
-	return nil, errors.New("no candidates computed")
+	return "", 0, errors.New("no candidates computed")
 
 }
 
-func (self *ElectionManager) ProcessVote(from string, vote *Vote) {
+func (self *Manager) ProcessVote(from, peerId string, viewId int64) error {
 
-	fmt.Printf("vote for %s from %s\n", vote.GetPeerId(), from)
+	fmt.Printf("vote for %s from %s\n", peerId, from)
+
+	if viewId < self.view || (self.state.Current() == "elected" && viewId == self.view) {
+		return errors.New("ignoring stale vote")
+	}
 
 	prevCount := len(self.votes)
 
-	self.votes[from] = vote
+	vote := &Vote{viewId: viewId, peerId: peerId}
+	self.votes[from] = *vote
 	if prevCount == 0 {
 		self.first = vote // This gives extra weight to the first received vote
 	}
@@ -128,41 +140,53 @@ func (self *ElectionManager) ProcessVote(from string, vote *Vote) {
 		self.state.Event("quorum")
 	}
 
-	results := make(map[string]int)
+	type Result struct {
+		votes     int64
+		maxViewId int64
+	}
+
+	results := make(map[string]*Result)
 
 	// We will choose the first entry with enough accumulated votes to exceed quorum.  There should
 	// only be one
 	for _, vote := range self.votes {
-		peerId := vote.GetPeerId()
-		result := results[peerId]
-		result++
-		results[peerId] = result
-		if result >= self.threshold {
-			self.state.Event("complete", peerId, vote.GetViewId())
+		peerId := vote.peerId
+		viewId := vote.viewId
+		result, ok := results[peerId]
+		if !ok {
+			result = &Result{votes: 1}
+			results[peerId] = result
+		} else {
+			result.votes++
+		}
+
+		if viewId > result.maxViewId {
+			result.maxViewId = viewId
+		}
+
+		if result.votes >= int64(self.threshold) {
+			self.state.Event("complete", peerId, result.maxViewId)
 			continue
 		}
 	}
+
+	return nil
 }
 
-func (self *ElectionManager) onElecting() {
+func (self *Manager) onElecting() {
 	fmt.Printf("EM: Begin Election\n")
 	self.C <- false
 }
 
-func (self *ElectionManager) onElected(leader string, view int64) {
+func (self *Manager) onElected(leader string, view int64) {
 	fmt.Printf("EM: Election Complete, new leader = %s\n", leader)
 	self.leader = leader
-	self.resetView(view)
-	self.C <- true // notify our observers
-}
-
-func (self *ElectionManager) resetView(view int64) {
 	self.view = view
 	self.votes = make(Votes) // clear any outstanding votes
 	self.first = nil
+	self.C <- true // notify our observers
 }
 
-func (self *ElectionManager) NextView() {
-	self.resetView(self.view + 1)
-	self.state.Event("next-view")
+func (self *Manager) NextView() {
+	self.state.Event("next")
 }
