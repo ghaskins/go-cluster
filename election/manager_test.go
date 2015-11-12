@@ -1,4 +1,4 @@
-package main
+package election
 
 import (
 	"github.com/ghaskins/go-cluster/pb"
@@ -9,7 +9,7 @@ import (
 func TestElection(t *testing.T) {
 	members := []string{"A", "B", "C", "D", "E"}
 	id := "A"
-	em := NewElectionManager(id, members)
+	em := NewManager(id, members)
 
 	_, err := em.Current()
 	assert.NotNil(t, err)

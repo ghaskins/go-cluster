@@ -1,15 +1,16 @@
-package main
+package election
 
 import (
 	"errors"
 	"fmt"
 	"github.com/ghaskins/go-cluster/pb"
+	"github.com/ghaskins/go-cluster/util"
 	"github.com/looplab/fsm"
 )
 
 type Votes map[string]*pb.Vote
 
-type ElectionManager struct {
+type Manager struct {
 	state     *fsm.FSM
 	myId      string
 	members   []string
@@ -21,12 +22,12 @@ type ElectionManager struct {
 	C         chan bool
 }
 
-func NewElectionManager(_myId string, _members []string) *ElectionManager {
-	self := &ElectionManager{
+func NewManager(_myId string, _members []string) *Manager {
+	self := &Manager{
 		myId:      _myId,
 		members:   _members,
 		votes:     make(Votes),
-		threshold: ComputeQuorumThreshold(len(_members)),
+		threshold: util.ComputeQuorumThreshold(len(_members)),
 		C:         make(chan bool, 100),
 	}
 
@@ -48,7 +49,7 @@ func NewElectionManager(_myId string, _members []string) *ElectionManager {
 	return self
 }
 
-func (self *ElectionManager) Current() (string, error) {
+func (self *Manager) Current() (string, error) {
 	switch self.state.Current() {
 	case "elected":
 		return self.leader, nil
@@ -58,22 +59,22 @@ func (self *ElectionManager) Current() (string, error) {
 
 }
 
-func (self *ElectionManager) View() int64 {
+func (self *Manager) View() int64 {
 	return self.view
 }
 
-func (self *ElectionManager) Invalidate(member string) {
+func (self *Manager) Invalidate(member string) {
 	delete(self.votes, member)
 	if self.state.Current() == "elected" && member == self.leader {
 		self.state.Event("leader-lost")
 	}
 }
 
-func (self *ElectionManager) VoteCount() int {
+func (self *Manager) VoteCount() int {
 	return len(self.votes)
 }
 
-func (self *ElectionManager) GetContender() (*pb.Vote, error) {
+func (self *Manager) GetContender() (*pb.Vote, error) {
 	if len(self.votes) == 0 {
 		return nil, errors.New("no candidates present")
 	}
@@ -111,7 +112,7 @@ func (self *ElectionManager) GetContender() (*pb.Vote, error) {
 
 }
 
-func (self *ElectionManager) ProcessVote(from string, vote *pb.Vote) error {
+func (self *Manager) ProcessVote(from string, vote *pb.Vote) error {
 
 	fmt.Printf("vote for %s from %s\n", vote.GetPeerId(), from)
 
@@ -165,12 +166,12 @@ func (self *ElectionManager) ProcessVote(from string, vote *pb.Vote) error {
 	return nil
 }
 
-func (self *ElectionManager) onElecting() {
+func (self *Manager) onElecting() {
 	fmt.Printf("EM: Begin Election\n")
 	self.C <- false
 }
 
-func (self *ElectionManager) onElected(leader string, view int64) {
+func (self *Manager) onElected(leader string, view int64) {
 	fmt.Printf("EM: Election Complete, new leader = %s\n", leader)
 	self.leader = leader
 	self.view = view
@@ -179,6 +180,6 @@ func (self *ElectionManager) onElected(leader string, view int64) {
 	self.C <- true // notify our observers
 }
 
-func (self *ElectionManager) NextView() {
+func (self *Manager) NextView() {
 	self.view++
 }

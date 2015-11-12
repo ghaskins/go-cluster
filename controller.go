@@ -3,7 +3,9 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/ghaskins/go-cluster/election"
 	"github.com/ghaskins/go-cluster/pb"
+	"github.com/ghaskins/go-cluster/util"
 	"github.com/golang/protobuf/proto"
 	"github.com/looplab/fsm"
 	"math/big"
@@ -19,7 +21,7 @@ type Controller struct {
 	quorumThreshold int
 	timer           *time.Timer
 	pulse           *time.Ticker
-	electionManager *ElectionManager
+	electionManager *election.Manager
 	minTmo          int64
 	maxTmo          int64
 }
@@ -37,10 +39,10 @@ func NewController(_id string, _peers IdentityMap, _connMgr *ConnectionManager) 
 		connMgr:         _connMgr,
 		myId:            _id,
 		activePeers:     make(map[string]*Peer),
-		quorumThreshold: ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
+		quorumThreshold: util.ComputeQuorumThreshold(len(_peers)) - 1, // We don't include ourselves
 		timer:           time.NewTimer(0),
 		pulse:           time.NewTicker(1),
-		electionManager: NewElectionManager(_id, members),
+		electionManager: election.NewManager(_id, members),
 		minTmo:          500,
 		maxTmo:          1000,
 	}
