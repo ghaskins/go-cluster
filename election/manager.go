@@ -120,7 +120,7 @@ func (self *Manager) GetContender() (string, int64, error) {
 
 func (self *Manager) ProcessVote(from, peerId string, viewId int64) error {
 
-	fmt.Printf("vote for %s from %s\n", peerId, from)
+	fmt.Printf("vote for %s in view %d from %s\n", peerId, viewId, from)
 
 	if viewId < self.view || (self.state.Current() == "elected" && viewId == self.view) {
 		return errors.New("ignoring stale vote")
