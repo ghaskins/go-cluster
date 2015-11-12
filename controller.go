@@ -58,8 +58,9 @@ func NewController(_id string, _peers IdentityMap) *Controller {
 		fsm.Callbacks{
 			"enter_initializing": func(e *fsm.Event) { self.rearmTimer() },
 			"leave_initializing": func(e *fsm.Event) { self.timer.Stop() },
-			"enter_following":    func(e *fsm.Event) { self.rearmTimer() },
+			"enter_following":    func(e *fsm.Event) { self.onFollowing() },
 			"leave_following":    func(e *fsm.Event) { self.timer.Stop() },
+			"enter_leading":      func(e *fsm.Event) { self.onLeading() },
 			"heartbeat":          func(e *fsm.Event) { self.onHeartBeat(e.Args[0].(string), e.Args[1].(int64)) },
 			"electing":           func(e *fsm.Event) { self.onElecting() },
 			"before_timeout":     func(e *fsm.Event) { self.onTimeout() },
@@ -137,6 +138,7 @@ func (self *Controller) Run() {
 		//---------------------------------------------------------
 		case val := <-self.electionManager.C:
 
+			fmt.Printf("EM %v!\n", val)
 			if val {
 				// val == true means we elected a new leader
 				leader, err := self.electionManager.Current()
@@ -219,6 +221,20 @@ func (self *Controller) onElecting() {
 
 	fmt.Printf("broadcasting vote for %s\n", vote.GetPeerId())
 	self.broadcast(vote)
+}
+
+func (self *Controller) onFollowing() {
+	self.rearmTimer()
+	leader, err := self.electionManager.Current()
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("following %s\n", leader)
+}
+
+func (self *Controller) onLeading() {
+	fmt.Printf("we are the leader\n")
 }
 
 func (self *Controller) broadcast(msg proto.Message) {
