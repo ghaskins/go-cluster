@@ -45,7 +45,7 @@ func NewManager(_myId string, _members []string) *Manager {
 		fsm.Callbacks{
 			"electing": func(e *fsm.Event) { self.onElecting() },
 			"enter_elected":  func(e *fsm.Event) { self.onElected(e.Args[0].(string), e.Args[1].(int64)) },
-			"leavw_elected":  func(e *fsm.Event) { self.view++ },
+			"leave_elected":  func(e *fsm.Event) { self.view++ },
 		},
 	)
 
