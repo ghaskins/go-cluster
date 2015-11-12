@@ -164,11 +164,10 @@ func (self *Controller) Run() {
 		// timeouts
 		//---------------------------------------------------------
 		case _ = <-self.timer.C:
-			fmt.Printf("timeout\n")
 			self.state.Event("timeout")
 
 		//---------------------------------------------------------
-		// timeouts
+		// pulse ticker
 		//---------------------------------------------------------
 		case _ = <-self.pulse.C:
 			if self.state.Current() == "leading" {
@@ -219,6 +218,12 @@ func (self *Controller) onTimeout() {
 
 	fmt.Printf("onTimeout\n")
 
+	self.rearmTimeout()
+}
+
+func (self *Controller) onElecting() {
+	fmt.Printf("onElecting\n")
+
 	vote, err := self.electionManager.GetContender()
 	if err != nil {
 		// Vote for ourselves if there isn't a current contender
@@ -227,16 +232,6 @@ func (self *Controller) onTimeout() {
 	}
 
 	self.electionManager.ProcessVote(self.myId, vote)
-
-	self.rearmTimeout()
-}
-
-func (self *Controller) onElecting() {
-	fmt.Printf("onElecting\n")
-	vote, err := self.electionManager.GetContender()
-	if err != nil {
-		panic(err)
-	}
 
 	fmt.Printf("broadcasting vote for %s\n", vote.GetPeerId())
 	self.broadcast(vote)
