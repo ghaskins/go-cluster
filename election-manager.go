@@ -47,7 +47,7 @@ func NewElectionManager(_myId string, _members []string) *ElectionManager {
 
 func (self *ElectionManager) Current() (string, error) {
 	switch self.state.Current() {
-	case "complete":
+	case "elected":
 		return self.leader, nil
 	default:
 		return "", errors.New("leader unknown")

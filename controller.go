@@ -142,12 +142,14 @@ func (self *Controller) Run() {
 			if val {
 				// val == true means we elected a new leader
 				leader, err := self.electionManager.Current()
-				if err == nil {
-					if leader == self.myId {
-						self.state.Event("elected-self")
-					} else {
-						self.state.Event("elected-other")
-					}
+				if err != nil {
+					panic(err)
+				}
+
+				if leader == self.myId {
+					self.state.Event("elected-self")
+				} else {
+					self.state.Event("elected-other")
 				}
 			} else {
 				// val == false means we started a new election
