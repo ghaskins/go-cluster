@@ -37,4 +37,8 @@ func TestElection(t *testing.T) {
 
 	viewId = em.View()
 	assert.Equal(t, viewId, int64(1))
+
+	// This should be rejected because the view is stale
+	err = em.ProcessVote("D", vote)
+	assert.NotNil(t, err)
 }
