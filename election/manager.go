@@ -38,7 +38,7 @@ func NewManager(_myId string, _members []string) *Manager {
 	self.state = fsm.NewFSM(
 		"idle",
 		fsm.Events{
-			{Name: "quorum", Src: []string{"idle", "resolved"}, Dst: "electing"},
+			{Name: "quorum", Src: []string{"idle", "elected"}, Dst: "electing"},
 			{Name: "complete", Src: []string{"electing"}, Dst: "elected"},
 			{Name: "next", Src: []string{"elected"}, Dst: "idle"},
 		},
@@ -120,7 +120,7 @@ func (self *Manager) GetContender() (string, int64, error) {
 
 func (self *Manager) ProcessVote(from, peerId string, viewId int64) error {
 
-	fmt.Printf("vote for %s in view %d from %s\n", peerId, viewId, from)
+	fmt.Printf("EM: vote for %s in view %d from %s\n", peerId, viewId, from)
 
 	if viewId < self.view || (self.state.Current() == "elected" && viewId == self.view) {
 		return errors.New("ignoring stale vote")
@@ -136,7 +136,8 @@ func (self *Manager) ProcessVote(from, peerId string, viewId int64) error {
 
 	currCount := len(self.votes)
 
-	if prevCount != currCount && currCount == self.threshold {
+	// Our criteria for proposal-quorum is threshold - 1 because we don't include ourselves
+	if prevCount != currCount && currCount == (self.threshold - 1) {
 		self.state.Event("quorum")
 	}
 
