@@ -96,7 +96,7 @@ func (self *ConnectionManager) Dial(peerId string) {
 			if err == nil {
 				break
 			}
-			time.Sleep(time.Duration(5) * time.Second)
+			time.Sleep(time.Duration(1) * time.Second)
 		}
 
 		self.C <- conn
