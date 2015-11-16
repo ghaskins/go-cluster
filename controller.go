@@ -145,10 +145,7 @@ func (self *Controller) Run() {
 				self.state.Event("heartbeat", _msg.From.Id(), msg.GetViewId())
 			case *pb.Vote:
 				msg := _msg.Payload.(*pb.Vote)
-				err := self.electionManager.ProcessVote(_msg.From.Id(), msg.GetPeerId(), msg.GetViewId())
-				if err != nil {
-					fmt.Printf("%s\n", err.Error())
-				}
+				self.onVote(_msg.From.Id(), msg.GetPeerId(), msg.GetViewId())
 			}
 
 		//---------------------------------------------------------
@@ -240,6 +237,39 @@ func (self *Controller) castSelfBallot() {
 	viewId := self.electionManager.View()
 
 	self.castBallot(self.myId, viewId)
+}
+
+func (self *Controller) onVote(from, peerId string, viewId int64) {
+	allow := false
+
+	switch self.state.Current() {
+	case "convening":
+		fallthrough
+	case "initializing":
+		allow = true // Allow any vote through in convening/initializing state
+	case "electing":
+		// Only allow votes for the current view through
+		if viewId == self.electionManager.View() {
+			allow = true
+		}
+	case "following":
+		fallthrough
+	case "leading":
+		// Only allow votes for the next view through
+		if viewId == self.electionManager.View()+1 {
+			allow = true
+		}
+	}
+
+	if !allow {
+		fmt.Printf("Dropping vote from %s for %s:%d in state %s\n", from, peerId, viewId, self.state.Current())
+		return
+	}
+
+	err := self.electionManager.ProcessVote(from, peerId, viewId)
+	if err != nil {
+		fmt.Printf("Dropping vote from %s: %s\n", from, err.Error())
+	}
 }
 
 func (self *Controller) onConvening() {
