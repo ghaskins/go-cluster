@@ -7,10 +7,6 @@ import (
 	"github.com/looplab/fsm"
 )
 
-type Vote struct {
-	viewId int64
-	peerId string
-}
 
 type Votes map[string]Vote
 
@@ -137,32 +133,24 @@ func (self *Manager) ProcessVote(from, peerId string, viewId int64) error {
 		self.state.Event("quorum")
 	}
 
-	type Result struct {
-		votes     int64
-		maxViewId int64
-	}
-
-	results := make(map[string]*Result)
+	results := make(map[string]*int64)
 
 	// We will choose the first entry with enough accumulated votes to exceed quorum.  There should
 	// only be one
 	for _, vote := range self.votes {
-		peerId := vote.peerId
-		viewId := vote.viewId
-		result, ok := results[peerId]
+
+		index := vote.GetIndex()
+
+		result, ok := results[index]
 		if !ok {
-			result = &Result{votes: 1}
-			results[peerId] = result
-		} else {
-			result.votes++
+			result = new(int64)
+			results[index] = result
 		}
 
-		if viewId > result.maxViewId {
-			result.maxViewId = viewId
-		}
+		(*result)++
 
-		if result.votes >= int64(self.threshold) {
-			self.state.Event("complete", peerId, result.maxViewId)
+		if *result >= int64(self.threshold) {
+			self.state.Event("complete", vote.peerId, vote.viewId)
 			continue
 		}
 	}
